@@ -214,14 +214,12 @@ function resolve_go_fish(PDO $pdo, array $game, bool $timedOut = false): void {
     if (empty($players)) {
         return;
     }
-    if ($matched && in_array($askerId, array_column($players, 'id'), true)) {
-        $deck = start_next_turn($pdo, (int) $game['id'], $askerId, $deck);
-    } else {
-        $refIds = array_column($players, 'id');
-        $refId = in_array($askerId, $refIds, true) ? $askerId : $players[0]['id'];
-        $next = next_seat_player($players, (int) $refId);
-        $deck = start_next_turn($pdo, (int) $game['id'], (int) $next['id'], $deck);
-    }
+    // Drawing from the pond always ends the turn -- even if the draw matches
+    // the asked-for fish or completes a set, the asker does not go again.
+    $refIds = array_column($players, 'id');
+    $refId = in_array($askerId, $refIds, true) ? $askerId : $players[0]['id'];
+    $next = next_seat_player($players, (int) $refId);
+    $deck = start_next_turn($pdo, (int) $game['id'], (int) $next['id'], $deck);
 
     $freshGame = fetch_game($pdo, (int) $game['id']);
     check_game_end($pdo, $freshGame);

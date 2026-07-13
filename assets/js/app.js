@@ -783,7 +783,7 @@
                 playSplash();
                 var prefix = ev.timed_out ? (nameOf(ev.target_id) + " didn't respond in time, so " + nameOf(ev.asker_id) + ' went fishing') : (nameOf(ev.asker_id) + ' went fishing');
                 if (ev.matched) {
-                    msg = prefix.replace('went fishing', 'fished up a ' + (ft ? ft.emoji + ' ' + ft.name : '') + '!') + ' Goes again.';
+                    msg = prefix.replace('went fishing', 'fished up a ' + (ft ? ft.emoji + ' ' + ft.name : '') + '!') + ' Next player\'s turn.';
                 } else if (ev.pond_empty) {
                     msg = prefix + ' but the pond is empty!';
                 } else {
