@@ -24,23 +24,31 @@ if ($game['status'] !== 'finished') {
     json_error('The current game has not finished yet');
 }
 
-$pdo->beginTransaction();
-try {
-    $stmt = $pdo->prepare('UPDATE players SET hand = "[]", books = "[]", is_spectator = 0 WHERE game_id = ? AND status = "active"');
-    $stmt->execute([$game['id']]);
+$maxAttempts = 6;
+for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('UPDATE players SET hand = "[]", books = "[]", is_spectator = 0 WHERE game_id = ? AND status = "active"');
+        $stmt->execute([$game['id']]);
 
-    $stmt = $pdo->prepare('UPDATE games SET status = ?, deck = "[]", turn_player_id = NULL, turn_state = ?, turn_deadline = NULL,
-        pending_asker_id = NULL, pending_target_id = NULL, pending_fish = NULL,
-        tiebreak_player_ids = "[]", tiebreak_deck = "[]", tiebreak_turn_index = 0,
-        claimed_sets_by_left = 0, winner_player_id = NULL, updated_at = datetime("now") WHERE id = ?');
-    $stmt->execute(['waiting', 'awaiting_ask', $game['id']]);
+        $stmt = $pdo->prepare('UPDATE games SET status = ?, deck = "[]", turn_player_id = NULL, turn_state = ?, turn_deadline = NULL,
+            pending_asker_id = NULL, pending_target_id = NULL, pending_fish = NULL,
+            tiebreak_player_ids = "[]", tiebreak_deck = "[]", tiebreak_turn_index = 0,
+            claimed_sets_by_left = 0, winner_player_id = NULL, updated_at = datetime("now") WHERE id = ?');
+        $stmt->execute(['waiting', 'awaiting_ask', $game['id']]);
 
-    push_event($pdo, (int) $game['id'], ['type' => 'new_round', 'by' => $host['name']]);
+        push_event($pdo, (int) $game['id'], ['type' => 'new_round', 'by' => $host['name']]);
 
-    $pdo->commit();
-} catch (Throwable $e) {
-    $pdo->rollBack();
-    json_error('Could not start a new round: ' . $e->getMessage(), 500);
+        $pdo->commit();
+        break;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        if (is_db_busy_error($e) && $attempt < $maxAttempts) {
+            db_retry_backoff($attempt);
+            continue;
+        }
+        json_error('Could not start a new round: ' . $e->getMessage(), 500);
+    }
 }
 
 json_out(['ok' => true]);

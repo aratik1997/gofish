@@ -72,6 +72,34 @@ function refill_hand_from_deck(array $hand, array $books, array &$deck): array {
 }
 
 /**
+ * If $playerId's hand is currently empty, immediately refill it from the
+ * pond (up to 5 cards, or all that remain) -- regardless of whose turn it
+ * is. Used e.g. when handing over cards to an asker leaves a player with
+ * nothing left; they don't have to wait for their own turn to draw back up.
+ * Mutates $deck by reference and persists both the player and the game row.
+ */
+function refill_if_empty(PDO $pdo, int $gameId, int $playerId, array &$deck): void {
+    $stmt = $pdo->prepare('SELECT * FROM players WHERE id = ?');
+    $stmt->execute([$playerId]);
+    $player = $stmt->fetch();
+    if (!$player) {
+        return;
+    }
+    $hand = j_decode($player['hand']);
+    $books = j_decode($player['books']);
+    [$hand, $books, $setsFormed, $drawnCount] = refill_hand_from_deck($hand, $books, $deck);
+    if ($drawnCount === 0) {
+        return;
+    }
+    save_player($pdo, $playerId, $hand, $books);
+    if (!empty($setsFormed)) {
+        push_event($pdo, $gameId, ['type' => 'set_completed', 'player_id' => $playerId, 'sets' => $setsFormed, 'via' => 'refill']);
+    }
+    $stmt = $pdo->prepare('UPDATE games SET deck = ?, updated_at = datetime("now") WHERE id = ?');
+    $stmt->execute([j_encode($deck), $gameId]);
+}
+
+/**
  * Check whether all 13 sets have been claimed. If so, moves the game to
  * 'finished' (outright winner) or 'tiebreak' (luck round among leaders).
  */
@@ -280,34 +308,44 @@ function check_and_apply_timeout(PDO $pdo, array $game): array {
     }
 
     // Claim the timeout: only one concurrent request will affect a row here.
-    $stmt = $pdo->prepare('UPDATE games SET turn_deadline = NULL WHERE id = ? AND turn_deadline = ?');
-    $stmt->execute([$game['id'], $game['turn_deadline']]);
-    if ($stmt->rowCount() === 0) {
-        return fetch_game($pdo, (int) $game['id']);
-    }
+    // This whole block runs on every single poll from every player, so a busy
+    // database is swallowed rather than failing the request -- the same check
+    // simply runs again on the next poll a moment later.
+    try {
+        $stmt = $pdo->prepare('UPDATE games SET turn_deadline = NULL WHERE id = ? AND turn_deadline = ?');
+        $stmt->execute([$game['id'], $game['turn_deadline']]);
+        if ($stmt->rowCount() === 0) {
+            return fetch_game($pdo, (int) $game['id']);
+        }
 
-    if ($game['status'] === 'tiebreak') {
-        $tiebreakIds = j_decode($game['tiebreak_player_ids']);
-        $turnIdx = (int) $game['tiebreak_turn_index'];
-        if (isset($tiebreakIds[$turnIdx])) {
-            $playerId = (int) $tiebreakIds[$turnIdx];
-            $randomGuess = fish_keys()[array_rand(fish_keys())];
-            resolve_tiebreak_guess($pdo, $game, $playerId, $randomGuess, true);
+        if ($game['status'] === 'tiebreak') {
+            $tiebreakIds = j_decode($game['tiebreak_player_ids']);
+            $turnIdx = (int) $game['tiebreak_turn_index'];
+            if (isset($tiebreakIds[$turnIdx])) {
+                $playerId = (int) $tiebreakIds[$turnIdx];
+                $randomGuess = fish_keys()[array_rand(fish_keys())];
+                resolve_tiebreak_guess($pdo, $game, $playerId, $randomGuess, true);
+            }
+        } elseif ($game['turn_state'] === 'awaiting_gofish') {
+            resolve_go_fish($pdo, $game, true);
+        } elseif ($game['turn_state'] === 'awaiting_ask') {
+            $players = playing_players($pdo, (int) $game['id']);
+            if (!empty($players)) {
+                $refIds = array_column($players, 'id');
+                $currentId = (int) $game['turn_player_id'];
+                $refId = in_array($currentId, $refIds, true) ? $currentId : $players[0]['id'];
+                $next = next_seat_player($players, (int) $refId);
+                push_event($pdo, (int) $game['id'], ['type' => 'turn_timeout', 'player_id' => $currentId]);
+                start_next_turn($pdo, (int) $game['id'], (int) $next['id'], j_decode($game['deck']));
+                $freshGame = fetch_game($pdo, (int) $game['id']);
+                check_game_end($pdo, $freshGame);
+            }
         }
-    } elseif ($game['turn_state'] === 'awaiting_gofish') {
-        resolve_go_fish($pdo, $game, true);
-    } elseif ($game['turn_state'] === 'awaiting_ask') {
-        $players = playing_players($pdo, (int) $game['id']);
-        if (!empty($players)) {
-            $refIds = array_column($players, 'id');
-            $currentId = (int) $game['turn_player_id'];
-            $refId = in_array($currentId, $refIds, true) ? $currentId : $players[0]['id'];
-            $next = next_seat_player($players, (int) $refId);
-            push_event($pdo, (int) $game['id'], ['type' => 'turn_timeout', 'player_id' => $currentId]);
-            start_next_turn($pdo, (int) $game['id'], (int) $next['id'], j_decode($game['deck']));
-            $freshGame = fetch_game($pdo, (int) $game['id']);
-            check_game_end($pdo, $freshGame);
+    } catch (Throwable $e) {
+        if (is_db_busy_error($e)) {
+            return fetch_game($pdo, (int) $game['id']);
         }
+        throw $e;
     }
 
     return fetch_game($pdo, (int) $game['id']);

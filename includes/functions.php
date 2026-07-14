@@ -84,3 +84,17 @@ function j_decode(string $json): array {
 function j_encode(array $data): string {
     return json_encode($data);
 }
+
+/**
+ * True if $e represents a transient SQLite lock/busy contention error
+ * (as opposed to a real bug) -- these are safe to retry.
+ */
+function is_db_busy_error(Throwable $e): bool {
+    $msg = $e->getMessage();
+    return stripos($msg, 'locked') !== false || stripos($msg, 'busy') !== false;
+}
+
+/** Short randomized pause between retry attempts, growing with each attempt. */
+function db_retry_backoff(int $attempt): void {
+    usleep(random_int(40000, 120000) * $attempt);
+}

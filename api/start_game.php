@@ -29,29 +29,36 @@ if (count($players) < 2) {
     json_error('Need at least 2 players to start');
 }
 
-$deck = build_deck();
-
-$pdo->beginTransaction();
-try {
-    foreach ($players as $p) {
-        $hand = [];
-        for ($i = 0; $i < 5; $i++) {
-            $hand[] = array_pop($deck);
+$maxAttempts = 6;
+for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+    $deck = build_deck(); // fresh shuffle each attempt -- a retry must not reuse a partially-dealt deck
+    $pdo->beginTransaction();
+    try {
+        foreach ($players as $p) {
+            $hand = [];
+            for ($i = 0; $i < 5; $i++) {
+                $hand[] = array_pop($deck);
+            }
+            [$hand, $setsFormed] = extract_books($hand);
+            save_player($pdo, (int) $p['id'], $hand, $setsFormed);
         }
-        [$hand, $setsFormed] = extract_books($hand);
-        save_player($pdo, (int) $p['id'], $hand, $setsFormed);
+
+        $firstPlayer = $players[0];
+        $stmt = $pdo->prepare('UPDATE games SET status = ?, deck = ?, turn_player_id = ?, turn_state = ?, turn_deadline = ?, claimed_sets_by_left = 0, updated_at = datetime("now") WHERE id = ?');
+        $stmt->execute(['playing', j_encode($deck), $firstPlayer['id'], 'awaiting_ask', new_turn_deadline(), $game['id']]);
+
+        push_event($pdo, (int) $game['id'], ['type' => 'game_started']);
+
+        $pdo->commit();
+        break;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        if (is_db_busy_error($e) && $attempt < $maxAttempts) {
+            db_retry_backoff($attempt);
+            continue;
+        }
+        json_error('Could not start game', 500);
     }
-
-    $firstPlayer = $players[0];
-    $stmt = $pdo->prepare('UPDATE games SET status = ?, deck = ?, turn_player_id = ?, turn_state = ?, turn_deadline = ?, claimed_sets_by_left = 0, updated_at = datetime("now") WHERE id = ?');
-    $stmt->execute(['playing', j_encode($deck), $firstPlayer['id'], 'awaiting_ask', new_turn_deadline(), $game['id']]);
-
-    push_event($pdo, (int) $game['id'], ['type' => 'game_started']);
-
-    $pdo->commit();
-} catch (Throwable $e) {
-    $pdo->rollBack();
-    json_error('Could not start game', 500);
 }
 
 json_out(['ok' => true]);

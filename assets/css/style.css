@@ -762,6 +762,14 @@ button {
     font-size: 13px;
 }
 
+.lobby-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+
 .seat-kick-btn {
     position: absolute;
     top: -6px;
@@ -862,6 +870,101 @@ button {
     gap: 6px;
     margin-bottom: 18px;
 }
+
+/* ---------- Side game log ---------- */
+
+.log-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(3, 20, 26, 0.55);
+    z-index: 55;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+}
+.log-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.log-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 86vw);
+    background: var(--panel-bg);
+    border-left: 1px solid var(--panel-border);
+    box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+    z-index: 56;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+}
+.log-panel.show {
+    transform: translateX(0);
+}
+
+.log-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--panel-border);
+    flex-shrink: 0;
+}
+.log-panel-header h3 { margin: 0; font-size: 15px; }
+
+.log-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.log-list .log-entry {
+    font-size: 12.5px;
+    background: rgba(255,255,255,0.06);
+    padding: 7px 10px;
+    border-radius: 8px;
+    line-height: 1.4;
+}
+.log-list .log-time {
+    color: var(--gold);
+    font-weight: 700;
+    margin-right: 6px;
+    font-size: 11px;
+}
+.log-list .log-empty {
+    color: #cfe7ec;
+    font-size: 13px;
+    text-align: center;
+    margin-top: 20px;
+}
+
+/* ---------- Rules modal ---------- */
+
+.rules-list {
+    list-style: none;
+    padding: 0;
+    margin: 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+.rules-list li {
+    background: rgba(255,255,255,0.06);
+    padding: 10px 12px;
+    border-radius: 10px;
+}
+
+/* Rules can be opened from inside the lobby overlay, so it must stack above it. */
+#rules-overlay { z-index: 52; }
 
 /* ---------- Toast ---------- */
 

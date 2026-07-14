@@ -27,7 +27,19 @@ if ($me['status'] !== 'active') {
     json_error('You are not in this game', 403);
 }
 
-$stmt = $pdo->prepare('INSERT INTO chat_messages (game_id, player_id, name, message) VALUES (?, ?, ?, ?)');
-$stmt->execute([$game['id'], $me['id'], $me['name'], $message]);
+$maxAttempts = 6;
+for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+    try {
+        $stmt = $pdo->prepare('INSERT INTO chat_messages (game_id, player_id, name, message) VALUES (?, ?, ?, ?)');
+        $stmt->execute([$game['id'], $me['id'], $me['name'], $message]);
+        break;
+    } catch (Throwable $e) {
+        if (is_db_busy_error($e) && $attempt < $maxAttempts) {
+            db_retry_backoff($attempt);
+            continue;
+        }
+        json_error('Could not send message: ' . $e->getMessage(), 500);
+    }
+}
 
 json_out(['ok' => true]);

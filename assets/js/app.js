@@ -251,6 +251,14 @@
         qs('scoreboard-btn').addEventListener('click', function () { qs('scoreboard-overlay').style.display = 'flex'; });
         qs('scoreboard-close-btn').addEventListener('click', function () { qs('scoreboard-overlay').style.display = 'none'; });
 
+        qs('log-btn').addEventListener('click', openLog);
+        qs('log-close-btn').addEventListener('click', closeLog);
+        qs('log-backdrop').addEventListener('click', closeLog);
+
+        qs('rules-btn').addEventListener('click', function () { qs('rules-overlay').style.display = 'flex'; });
+        qs('lobby-rules-btn').addEventListener('click', function () { qs('rules-overlay').style.display = 'flex'; });
+        qs('rules-close-btn').addEventListener('click', function () { qs('rules-overlay').style.display = 'none'; });
+
         qs('play-again-btn').addEventListener('click', function () {
             qs('play-again-btn').disabled = true;
             post('play_again.php', { room_code: state.room, token: state.session.token })
@@ -327,6 +335,7 @@
 
         qs('leave-btn').style.display = 'inline-block';
         qs('scoreboard-btn').style.display = (game.status === 'waiting') ? 'none' : 'inline-block';
+        qs('log-btn').style.display = (game.status === 'waiting') ? 'none' : 'inline-block';
         qs('turn-banner-wrap').style.display = (game.status === 'waiting') ? 'none' : 'flex';
         state.turnDeadlineTs = (game.status === 'playing' || game.status === 'tiebreak') ? game.turn_deadline_ts : null;
         tickTurnTimer();
@@ -821,7 +830,34 @@
                 break;
         }
 
-        if (msg) showToast(msg);
+        if (msg) {
+            showToast(msg);
+            addLogEntry(msg);
+        }
+    }
+
+    function openLog() {
+        qs('log-panel').classList.add('show');
+        qs('log-backdrop').classList.add('show');
+    }
+    function closeLog() {
+        qs('log-panel').classList.remove('show');
+        qs('log-backdrop').classList.remove('show');
+    }
+
+    function addLogEntry(msg) {
+        var list = qs('log-list');
+        var empty = list.querySelector('.log-empty');
+        if (empty) empty.remove();
+        var time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        var entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML = '<span class="log-time">' + time + '</span>' + escapeHtml(msg);
+        list.appendChild(entry);
+        while (list.children.length > 200) {
+            list.removeChild(list.firstChild);
+        }
+        list.scrollTop = list.scrollHeight;
     }
 
     var toastTimer = null;

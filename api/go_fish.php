@@ -28,13 +28,21 @@ if ((int) $game['pending_target_id'] !== (int) $caller['id']) {
     json_error('Only the asked player can send the asker fishing', 403);
 }
 
-$pdo->beginTransaction();
-try {
-    resolve_go_fish($pdo, $game);
-    $pdo->commit();
-} catch (Throwable $e) {
-    $pdo->rollBack();
-    json_error('Could not process go fish: ' . $e->getMessage(), 500);
+$maxAttempts = 6;
+for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+    $pdo->beginTransaction();
+    try {
+        resolve_go_fish($pdo, $game);
+        $pdo->commit();
+        break;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        if (is_db_busy_error($e) && $attempt < $maxAttempts) {
+            db_retry_backoff($attempt);
+            continue;
+        }
+        json_error('Could not process go fish: ' . $e->getMessage(), 500);
+    }
 }
 
 json_out(['ok' => true]);

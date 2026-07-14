@@ -32,13 +32,21 @@ if (!isset($tiebreakIds[$turnIdx]) || (int) $tiebreakIds[$turnIdx] !== (int) $ca
     json_error('It is not your turn to guess', 403);
 }
 
-$pdo->beginTransaction();
-try {
-    resolve_tiebreak_guess($pdo, $game, (int) $caller['id'], $guess);
-    $pdo->commit();
-} catch (Throwable $e) {
-    $pdo->rollBack();
-    json_error('Could not process guess: ' . $e->getMessage(), 500);
+$maxAttempts = 6;
+for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+    $pdo->beginTransaction();
+    try {
+        resolve_tiebreak_guess($pdo, $game, (int) $caller['id'], $guess);
+        $pdo->commit();
+        break;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        if (is_db_busy_error($e) && $attempt < $maxAttempts) {
+            db_retry_backoff($attempt);
+            continue;
+        }
+        json_error('Could not process guess: ' . $e->getMessage(), 500);
+    }
 }
 
 json_out(['ok' => true]);

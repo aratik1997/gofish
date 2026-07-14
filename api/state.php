@@ -24,9 +24,16 @@ if ($me['status'] !== 'active') {
     ]);
 }
 
-// mark presence
-$stmt = $pdo->prepare('UPDATE players SET last_seen = datetime("now"), connected = 1 WHERE id = ?');
-$stmt->execute([$me['id']]);
+// mark presence -- best-effort; a busy database here just means presence is
+// a beat stale until the next poll, not worth failing the whole request over.
+try {
+    $stmt = $pdo->prepare('UPDATE players SET last_seen = datetime("now"), connected = 1 WHERE id = ?');
+    $stmt->execute([$me['id']]);
+} catch (Throwable $e) {
+    if (!is_db_busy_error($e)) {
+        throw $e;
+    }
+}
 
 $game = check_and_apply_timeout($pdo, $game);
 

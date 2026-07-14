@@ -54,56 +54,71 @@ if ($target['is_spectator']) {
 $targetHand = j_decode($target['hand']);
 $matchCount = count(array_filter($targetHand, fn($f) => $f === $fish));
 
-$pdo->beginTransaction();
-try {
-    if ($matchCount > 0) {
-        // Target hands over every card of that type.
-        $targetHand = array_values(array_filter($targetHand, fn($f) => $f !== $fish));
-        for ($i = 0; $i < $matchCount; $i++) {
-            $askerHand[] = $fish;
+$maxAttempts = 6;
+for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+    $pdo->beginTransaction();
+    try {
+        if ($matchCount > 0) {
+            // Target hands over every card of that type.
+            $targetHand = array_values(array_filter($targetHand, fn($f) => $f !== $fish));
+            for ($i = 0; $i < $matchCount; $i++) {
+                $askerHand[] = $fish;
+            }
+            save_player($pdo, (int) $target['id'], $targetHand, j_decode($target['books']));
+
+            // If handing those cards over emptied the target's whole hand, they
+            // refill immediately -- at any cost, they don't wait for their own turn.
+            $deck = j_decode($game['deck']);
+            if (count($targetHand) === 0) {
+                refill_if_empty($pdo, (int) $game['id'], (int) $target['id'], $deck);
+            }
+
+            [$askerHand, $setsFormed] = extract_books($askerHand);
+            $askerBooks = j_decode($asker['books']);
+            foreach ($setsFormed as $s) {
+                $askerBooks[] = $s;
+            }
+            save_player($pdo, (int) $asker['id'], $askerHand, $askerBooks);
+
+            push_event($pdo, (int) $game['id'], [
+                'type' => 'caught',
+                'asker_id' => (int) $asker['id'],
+                'target_id' => (int) $target['id'],
+                'fish' => $fish,
+                'count' => $matchCount,
+                'sets_formed' => $setsFormed,
+            ]);
+
+            // The asker keeps their turn — but route through start_next_turn so that
+            // if the catch cleaned out their entire hand (e.g. it completed a set
+            // using every card they had), they still refill from the pond or get
+            // skipped, instead of being left stuck with an empty hand.
+            start_next_turn($pdo, (int) $game['id'], (int) $asker['id'], $deck);
+
+            $freshGame = require_game($pdo, $roomCode);
+            check_game_end($pdo, $freshGame);
+        } else {
+            $stmt = $pdo->prepare('UPDATE games SET turn_state = ?, turn_deadline = ?, pending_asker_id = ?, pending_target_id = ?, pending_fish = ?, updated_at = datetime("now") WHERE id = ?');
+            $stmt->execute(['awaiting_gofish', new_turn_deadline(), $asker['id'], $target['id'], $fish, $game['id']]);
+
+            push_event($pdo, (int) $game['id'], [
+                'type' => 'go_fish_prompt',
+                'asker_id' => (int) $asker['id'],
+                'target_id' => (int) $target['id'],
+                'fish' => $fish,
+            ]);
         }
-        save_player($pdo, (int) $target['id'], $targetHand, j_decode($target['books']));
 
-        [$askerHand, $setsFormed] = extract_books($askerHand);
-        $askerBooks = j_decode($asker['books']);
-        foreach ($setsFormed as $s) {
-            $askerBooks[] = $s;
+        $pdo->commit();
+        break;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        if (is_db_busy_error($e) && $attempt < $maxAttempts) {
+            db_retry_backoff($attempt);
+            continue;
         }
-        save_player($pdo, (int) $asker['id'], $askerHand, $askerBooks);
-
-        push_event($pdo, (int) $game['id'], [
-            'type' => 'caught',
-            'asker_id' => (int) $asker['id'],
-            'target_id' => (int) $target['id'],
-            'fish' => $fish,
-            'count' => $matchCount,
-            'sets_formed' => $setsFormed,
-        ]);
-
-        // The asker keeps their turn — but route through start_next_turn so that
-        // if the catch cleaned out their entire hand (e.g. it completed a set
-        // using every card they had), they still refill from the pond or get
-        // skipped, instead of being left stuck with an empty hand.
-        start_next_turn($pdo, (int) $game['id'], (int) $asker['id'], j_decode($game['deck']));
-
-        $freshGame = require_game($pdo, $roomCode);
-        check_game_end($pdo, $freshGame);
-    } else {
-        $stmt = $pdo->prepare('UPDATE games SET turn_state = ?, turn_deadline = ?, pending_asker_id = ?, pending_target_id = ?, pending_fish = ?, updated_at = datetime("now") WHERE id = ?');
-        $stmt->execute(['awaiting_gofish', new_turn_deadline(), $asker['id'], $target['id'], $fish, $game['id']]);
-
-        push_event($pdo, (int) $game['id'], [
-            'type' => 'go_fish_prompt',
-            'asker_id' => (int) $asker['id'],
-            'target_id' => (int) $target['id'],
-            'fish' => $fish,
-        ]);
+        json_error('Could not process ask: ' . $e->getMessage(), 500);
     }
-
-    $pdo->commit();
-} catch (Throwable $e) {
-    $pdo->rollBack();
-    json_error('Could not process ask: ' . $e->getMessage(), 500);
 }
 
 json_out(['ok' => true]);

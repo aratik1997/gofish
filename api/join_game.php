@@ -38,11 +38,28 @@ if (!$isSpectator) {
 
 $token = gen_token();
 $seatOrder = count($players);
-$stmt = $pdo->prepare('INSERT INTO players (game_id, name, token, seat_order, is_host, is_spectator) VALUES (?, ?, ?, ?, 0, ?)');
-$stmt->execute([$game['id'], $name, $token, $seatOrder, $isSpectator ? 1 : 0]);
-$playerId = (int) $pdo->lastInsertId();
 
-push_event($pdo, (int) $game['id'], ['type' => 'player_joined', 'name' => $name, 'spectator' => $isSpectator]);
+$maxAttempts = 6;
+for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('INSERT INTO players (game_id, name, token, seat_order, is_host, is_spectator) VALUES (?, ?, ?, ?, 0, ?)');
+        $stmt->execute([$game['id'], $name, $token, $seatOrder, $isSpectator ? 1 : 0]);
+        $playerId = (int) $pdo->lastInsertId();
+
+        push_event($pdo, (int) $game['id'], ['type' => 'player_joined', 'name' => $name, 'spectator' => $isSpectator]);
+
+        $pdo->commit();
+        break;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        if (is_db_busy_error($e) && $attempt < $maxAttempts) {
+            db_retry_backoff($attempt);
+            continue;
+        }
+        json_error('Could not join game: ' . $e->getMessage(), 500);
+    }
+}
 
 json_out([
     'ok' => true,

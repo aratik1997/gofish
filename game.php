@@ -17,6 +17,8 @@
             <button id="copy-room" type="button" title="Copy invite link">📋<span class="btn-label"> Copy Invite</span></button>
         </div>
         <button id="scoreboard-btn" class="icon-btn" type="button" style="display:none" title="Scoreboard">🏆<span class="btn-label"> Scores</span></button>
+        <button id="log-btn" class="icon-btn" type="button" title="Game Log">📜<span class="btn-label"> Log</span></button>
+        <button id="rules-btn" class="icon-btn" type="button" title="How to Play">📖<span class="btn-label"> Rules</span></button>
     </div>
     <div id="turn-banner-wrap" class="turn-banner-wrap">
         <div id="turn-banner" class="turn-banner">Loading pond…</div>
@@ -43,7 +45,10 @@
             </form>
         </div>
 
-        <button id="lobby-leave-btn" class="secondary-btn" type="button" style="margin-top:14px">Leave Lobby</button>
+        <div class="lobby-actions">
+            <button id="lobby-rules-btn" class="secondary-btn" type="button">📖 How to Play</button>
+            <button id="lobby-leave-btn" class="secondary-btn" type="button">Leave Lobby</button>
+        </div>
     </div>
 </section>
 
@@ -120,6 +125,32 @@
         <h2 id="kicked-title">You were removed</h2>
         <p id="kicked-msg" class="lobby-hint"></p>
         <a href="index.php" class="primary-btn">Back to Lobby List</a>
+    </div>
+</section>
+
+<div id="log-backdrop" class="log-backdrop"></div>
+<aside id="log-panel" class="log-panel">
+    <div class="log-panel-header">
+        <h3>📜 Game Log</h3>
+        <button id="log-close-btn" class="icon-btn" type="button">✕</button>
+    </div>
+    <div id="log-list" class="log-list"><div class="log-empty">No events yet…</div></div>
+</aside>
+
+<section id="rules-overlay" class="overlay" style="display:none">
+    <div class="overlay-card rules-card">
+        <h2>📖 How to Play</h2>
+        <ul class="rules-list">
+            <li>🎣 2–6 players. Each player starts with 5 cards from the pond.</li>
+            <li>🐟 On your turn, ask any other player for a fish type you already hold at least one of.</li>
+            <li>🤝 If they have it, they must hand over <strong>every</strong> card of that type. You keep your turn and can ask again.</li>
+            <li>🎣 If they don't have it, press <strong>Go Fish!</strong> to draw a card from the pond. Either way, your turn ends after — even if you happen to draw the exact card you asked for.</li>
+            <li>📚 Collecting all 4 of a fish type auto-extracts it as a scored "book" next to your name.</li>
+            <li>♻️ If your hand ever hits 0 cards, you immediately redraw up to 5 from the pond (fewer if the pond is low, or you're skipped if it's empty) — you don't have to wait for your turn.</li>
+            <li>⏱️ You have 60 seconds per turn/response — run out of time and it auto-resolves or skips.</li>
+            <li>🏆 When all 13 books are claimed, whoever has the most wins. A tie is settled with a luck-based guessing round on a freshly shuffled pond.</li>
+        </ul>
+        <button id="rules-close-btn" class="secondary-btn" type="button">Got it!</button>
     </div>
 </section>
 

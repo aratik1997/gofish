@@ -21,13 +21,21 @@ if ($me['status'] !== 'active') {
     json_out(['ok' => true]);
 }
 
-$pdo->beginTransaction();
-try {
-    remove_player_from_game($pdo, $game, $me, 'left', null);
-    $pdo->commit();
-} catch (Throwable $e) {
-    $pdo->rollBack();
-    json_error('Could not leave game: ' . $e->getMessage(), 500);
+$maxAttempts = 6;
+for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+    $pdo->beginTransaction();
+    try {
+        remove_player_from_game($pdo, $game, $me, 'left', null);
+        $pdo->commit();
+        break;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        if (is_db_busy_error($e) && $attempt < $maxAttempts) {
+            db_retry_backoff($attempt);
+            continue;
+        }
+        json_error('Could not leave game: ' . $e->getMessage(), 500);
+    }
 }
 
 json_out(['ok' => true]);
