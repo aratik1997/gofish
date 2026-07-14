@@ -16,9 +16,13 @@
         <div class="room-code-badge">Room <strong id="room-code-label">----</strong>
             <button id="copy-room" type="button" title="Copy invite link">📋<span class="btn-label"> Copy Invite</span></button>
         </div>
-        <button id="scoreboard-btn" class="icon-btn" type="button" style="display:none" title="Scoreboard">🏆<span class="btn-label"> Scores</span></button>
-        <button id="log-btn" class="icon-btn" type="button" title="Game Log">📜<span class="btn-label"> Log</span></button>
-        <button id="rules-btn" class="icon-btn" type="button" title="How to Play">📖<span class="btn-label"> Rules</span></button>
+        <button id="menu-toggle-btn" class="icon-btn menu-toggle-btn" type="button" title="Menu">☰ Menu</button>
+        <div id="header-actions" class="header-actions">
+            <button id="scoreboard-btn" class="icon-btn" type="button" style="display:none" title="Scoreboard">🏆<span class="btn-label"> Scores</span></button>
+            <button id="log-btn" class="icon-btn" type="button" title="Game Log">📜<span class="btn-label"> Log</span></button>
+            <button id="rules-btn" class="icon-btn" type="button" title="How to Play">📖<span class="btn-label"> Rules</span></button>
+            <button id="new-round-btn" class="icon-btn" type="button" style="display:none" title="Restart with a fresh round">🔄<span class="btn-label"> New Round</span></button>
+        </div>
     </div>
     <div id="turn-banner-wrap" class="turn-banner-wrap">
         <div id="turn-banner" class="turn-banner">Loading pond…</div>

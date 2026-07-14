@@ -196,7 +196,9 @@ button {
     justify-content: space-between;
     padding: 12px 18px;
     background: rgba(6, 30, 38, 0.55);
-    backdrop-filter: blur(4px);
+    /* No backdrop-filter here: it creates a stacking context on this element,
+       which would trap the header-actions dropdown below the toast/log-panel
+       no matter what z-index it's given. */
     z-index: 5;
     gap: 12px;
     flex-wrap: wrap;
@@ -208,7 +210,14 @@ button {
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+    position: relative;
 }
+
+/* Hidden on wide screens -- the action buttons render inline via display:contents.
+   Collapsed into a labeled dropdown only when the header gets too tight to read
+   (see the max-width:560px block below). */
+.menu-toggle-btn { display: none; }
+.header-actions { display: contents; }
 
 .room-code-badge {
     background: rgba(0,0,0,0.3);
@@ -1042,6 +1051,30 @@ input[type="text"] { font-size: 16px; }
     .icon-btn, .room-code-badge button { padding: 7px 10px; }
     .turn-banner { font-size: 12.5px; padding: 7px 12px; }
     .overlay-card { padding: 20px 16px; }
+
+    /* The header gets too tight for 4+ labeled icon buttons at this width --
+       collapse the secondary ones into a labeled dropdown instead of leaving
+       ambiguous unlabeled icons scattered across several wrapped rows. */
+    .menu-toggle-btn { display: inline-flex; align-items: center; gap: 4px; }
+    .header-actions {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 8px;
+        min-width: 180px;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+        z-index: 61; /* above the toast (60) -- an explicit tap should win over an ambient notification */
+    }
+    .header-actions.show { display: flex; }
+    .header-actions .icon-btn { justify-content: flex-start; width: 100%; }
+    .header-actions .btn-label { display: inline; }
 }
 
 /* Short viewports (phones in landscape): squeeze vertical chrome so the

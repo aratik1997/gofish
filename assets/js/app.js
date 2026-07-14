@@ -229,9 +229,18 @@
         });
 
         qs('start-game-btn').addEventListener('click', function () {
+            var btn = qs('start-game-btn');
+            if (btn.disabled) return;
+            btn.disabled = true;
             post('start_game.php', { room_code: state.room, token: state.session.token })
                 .then(poll)
-                .catch(function (err) { alert(err.message); });
+                .catch(function (err) {
+                    // A double-click (or a race with another poll) can fire this twice --
+                    // if the game already started, that's the outcome we wanted anyway.
+                    if (err.message !== 'Game already started') alert(err.message);
+                    poll();
+                })
+                .finally(function () { btn.disabled = false; });
         });
 
         qs('go-fish-btn').addEventListener('click', function () {
@@ -251,6 +260,19 @@
         qs('scoreboard-btn').addEventListener('click', function () { qs('scoreboard-overlay').style.display = 'flex'; });
         qs('scoreboard-close-btn').addEventListener('click', function () { qs('scoreboard-overlay').style.display = 'none'; });
 
+        qs('menu-toggle-btn').addEventListener('click', function (e) {
+            e.stopPropagation();
+            qs('header-actions').classList.toggle('show');
+        });
+        qs('header-actions').addEventListener('click', function (e) {
+            if (e.target.closest('button')) qs('header-actions').classList.remove('show');
+        });
+        document.addEventListener('click', function (e) {
+            if (!qs('header-actions').contains(e.target) && e.target !== qs('menu-toggle-btn')) {
+                qs('header-actions').classList.remove('show');
+            }
+        });
+
         qs('log-btn').addEventListener('click', openLog);
         qs('log-close-btn').addEventListener('click', closeLog);
         qs('log-backdrop').addEventListener('click', closeLog);
@@ -265,6 +287,17 @@
                 .then(poll)
                 .catch(function (err) { alert(err.message); })
                 .finally(function () { qs('play-again-btn').disabled = false; });
+        });
+
+        qs('new-round-btn').addEventListener('click', function () {
+            var btn = qs('new-round-btn');
+            if (btn.disabled) return;
+            if (!confirm('Start a brand new round? Everyone\'s current hand and books will be reset.')) return;
+            btn.disabled = true;
+            post('play_again.php', { room_code: state.room, token: state.session.token })
+                .then(poll)
+                .catch(function (err) { alert(err.message); })
+                .finally(function () { btn.disabled = false; });
         });
 
         qs('lobby-chat-form').addEventListener('submit', function (e) {
@@ -336,6 +369,7 @@
         qs('leave-btn').style.display = 'inline-block';
         qs('scoreboard-btn').style.display = (game.status === 'waiting') ? 'none' : 'inline-block';
         qs('log-btn').style.display = (game.status === 'waiting') ? 'none' : 'inline-block';
+        qs('new-round-btn').style.display = (me.is_host && game.status !== 'waiting') ? 'inline-block' : 'none';
         qs('turn-banner-wrap').style.display = (game.status === 'waiting') ? 'none' : 'flex';
         state.turnDeadlineTs = (game.status === 'playing' || game.status === 'tiebreak') ? game.turn_deadline_ts : null;
         tickTurnTimer();

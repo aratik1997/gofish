@@ -20,8 +20,10 @@ $host = require_player($pdo, (int) $game['id'], $token);
 if (!$host['is_host']) {
     json_error('Only the host can start a new round', 403);
 }
-if ($game['status'] !== 'finished') {
-    json_error('The current game has not finished yet');
+// Host can force a full restart at any point during an active round (not just
+// after it finishes) -- e.g. to recover from a stuck game or just start over.
+if (!in_array($game['status'], ['playing', 'tiebreak', 'finished'], true)) {
+    json_error('Nothing to restart yet');
 }
 
 $maxAttempts = 6;
