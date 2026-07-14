@@ -29,9 +29,13 @@ if (count($players) < 2) {
     json_error('Need at least 2 players to start');
 }
 
+// 2-6 players use the standard 13-set deck; 7-10 players get 2 extra sets
+// per player above 6 so there are enough cards to go around.
+$setCount = fish_set_count_for(count($players));
+
 $maxAttempts = 6;
 for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-    $deck = build_deck(); // fresh shuffle each attempt -- a retry must not reuse a partially-dealt deck
+    $deck = build_deck($setCount); // fresh shuffle each attempt -- a retry must not reuse a partially-dealt deck
     $pdo->beginTransaction();
     try {
         foreach ($players as $p) {
@@ -44,8 +48,8 @@ for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
         }
 
         $firstPlayer = $players[0];
-        $stmt = $pdo->prepare('UPDATE games SET status = ?, deck = ?, turn_player_id = ?, turn_state = ?, turn_deadline = ?, claimed_sets_by_left = 0, updated_at = datetime("now") WHERE id = ?');
-        $stmt->execute(['playing', j_encode($deck), $firstPlayer['id'], 'awaiting_ask', new_turn_deadline(), $game['id']]);
+        $stmt = $pdo->prepare('UPDATE games SET status = ?, deck = ?, turn_player_id = ?, turn_state = ?, turn_deadline = ?, claimed_sets_by_left = 0, fish_set_count = ?, updated_at = datetime("now") WHERE id = ?');
+        $stmt->execute(['playing', j_encode($deck), $firstPlayer['id'], 'awaiting_ask', new_turn_deadline(), $setCount, $game['id']]);
 
         push_event($pdo, (int) $game['id'], ['type' => 'game_started']);
 

@@ -91,5 +91,5 @@ json_out([
         'books' => j_decode($me['books']),
     ],
     'chat' => $chat,
-    'fish_types' => fish_types(),
+    'fish_types' => active_fish_types((int) $game['fish_set_count']),
 ]);

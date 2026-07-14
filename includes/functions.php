@@ -71,6 +71,7 @@ function playing_players(PDO $pdo, int $gameId): array {
 }
 
 const TURN_TIMEOUT_SECONDS = 60;
+const MAX_PLAYERS = 10;
 
 function new_turn_deadline(): string {
     return date('Y-m-d H:i:s', time() + TURN_TIMEOUT_SECONDS);

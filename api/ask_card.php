@@ -29,7 +29,7 @@ if ($game['turn_state'] !== 'awaiting_ask') {
 if ((int) $game['turn_player_id'] !== (int) $asker['id']) {
     json_error('It is not your turn', 403);
 }
-if (!is_valid_fish($fish)) {
+if (!is_valid_fish($fish, (int) $game['fish_set_count'])) {
     json_error('Unknown fish type');
 }
 if ($targetId === (int) $asker['id']) {

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS games (
     tiebreak_turn_index INTEGER NOT NULL DEFAULT 0,
     claimed_sets_by_left INTEGER NOT NULL DEFAULT 0, -- sets banked permanently when their owner left/was kicked
     winner_player_id INTEGER,
+    fish_set_count INTEGER NOT NULL DEFAULT 13, -- how many fish types are in play this round (13 base + 2 per player above 6)
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

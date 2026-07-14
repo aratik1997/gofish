@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Go Fish — Pond Party</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎣</text></svg>">
-<link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/assets/css/style.css'); ?>">
 </head>
 <body class="game-body">
 
@@ -16,13 +16,10 @@
         <div class="room-code-badge">Room <strong id="room-code-label">----</strong>
             <button id="copy-room" type="button" title="Copy invite link">📋<span class="btn-label"> Copy Invite</span></button>
         </div>
-        <button id="menu-toggle-btn" class="icon-btn menu-toggle-btn" type="button" title="Menu">☰ Menu</button>
-        <div id="header-actions" class="header-actions">
-            <button id="scoreboard-btn" class="icon-btn" type="button" style="display:none" title="Scoreboard">🏆<span class="btn-label"> Scores</span></button>
-            <button id="log-btn" class="icon-btn" type="button" title="Game Log">📜<span class="btn-label"> Log</span></button>
-            <button id="rules-btn" class="icon-btn" type="button" title="How to Play">📖<span class="btn-label"> Rules</span></button>
-            <button id="new-round-btn" class="icon-btn" type="button" style="display:none" title="Restart with a fresh round">🔄<span class="btn-label"> New Round</span></button>
-        </div>
+        <button id="scoreboard-btn" class="icon-btn" type="button" style="display:none" title="Scoreboard">🏆<span class="btn-label"> Scores</span></button>
+        <button id="chat-btn" class="icon-btn" type="button" title="Chat">💬<span class="btn-label"> Chat</span></button>
+        <button id="rules-btn" class="icon-btn" type="button" title="How to Play">📖<span class="btn-label"> Rules</span></button>
+        <button id="new-round-btn" class="icon-btn" type="button" style="display:none" title="Restart with a fresh round">🔄<span class="btn-label"> New Round</span></button>
     </div>
     <div id="turn-banner-wrap" class="turn-banner-wrap">
         <div id="turn-banner" class="turn-banner">Loading pond…</div>
@@ -36,20 +33,13 @@
 <section id="lobby-overlay" class="overlay">
     <div class="overlay-card">
         <h2>🎣 Waiting for anglers…</h2>
-        <p class="lobby-hint">Share the room code <strong id="lobby-room-code">----</strong> with friends (2–6 players).</p>
+        <p class="lobby-hint">Share the room code <strong id="lobby-room-code">----</strong> with friends (2–10 players).</p>
         <ul id="lobby-players" class="lobby-players"></ul>
         <button id="start-game-btn" class="primary-btn" style="display:none">Start Game</button>
         <p id="lobby-wait-msg" class="lobby-hint">Waiting for the host to start the game…</p>
 
-        <div class="lobby-chat">
-            <div id="lobby-chat-log" class="lobby-chat-log"></div>
-            <form id="lobby-chat-form" class="lobby-chat-form">
-                <input id="lobby-chat-input" type="text" maxlength="200" placeholder="Say hi…" autocomplete="off">
-                <button type="submit" class="primary-btn small">Send</button>
-            </form>
-        </div>
-
         <div class="lobby-actions">
+            <button id="lobby-chat-btn" class="secondary-btn" type="button">💬 Chat</button>
             <button id="lobby-rules-btn" class="secondary-btn" type="button">📖 How to Play</button>
             <button id="lobby-leave-btn" class="secondary-btn" type="button">Leave Lobby</button>
         </div>
@@ -132,27 +122,31 @@
     </div>
 </section>
 
-<div id="log-backdrop" class="log-backdrop"></div>
-<aside id="log-panel" class="log-panel">
-    <div class="log-panel-header">
-        <h3>📜 Game Log</h3>
-        <button id="log-close-btn" class="icon-btn" type="button">✕</button>
+<div id="chat-backdrop" class="side-backdrop"></div>
+<aside id="chat-panel" class="side-panel">
+    <div class="side-panel-header">
+        <h3>💬 Chat</h3>
+        <button id="chat-close-btn" class="icon-btn" type="button">✕</button>
     </div>
-    <div id="log-list" class="log-list"><div class="log-empty">No events yet…</div></div>
+    <div id="chat-log" class="chat-log side-panel-log"></div>
+    <form id="chat-form" class="chat-form side-panel-form">
+        <input id="chat-input" type="text" maxlength="200" placeholder="Say something…" autocomplete="off">
+        <button type="submit" class="primary-btn small">Send</button>
+    </form>
 </aside>
 
 <section id="rules-overlay" class="overlay" style="display:none">
     <div class="overlay-card rules-card">
         <h2>📖 How to Play</h2>
         <ul class="rules-list">
-            <li>🎣 2–6 players. Each player starts with 5 cards from the pond.</li>
+            <li>🎣 2–10 players. Each player starts with 5 cards from the pond. Games with 7+ players use extra fish types so there are enough cards to go around.</li>
             <li>🐟 On your turn, ask any other player for a fish type you already hold at least one of.</li>
             <li>🤝 If they have it, they must hand over <strong>every</strong> card of that type. You keep your turn and can ask again.</li>
             <li>🎣 If they don't have it, press <strong>Go Fish!</strong> to draw a card from the pond. Either way, your turn ends after — even if you happen to draw the exact card you asked for.</li>
             <li>📚 Collecting all 4 of a fish type auto-extracts it as a scored "book" next to your name.</li>
             <li>♻️ If your hand ever hits 0 cards, you immediately redraw up to 5 from the pond (fewer if the pond is low, or you're skipped if it's empty) — you don't have to wait for your turn.</li>
             <li>⏱️ You have 60 seconds per turn/response — run out of time and it auto-resolves or skips.</li>
-            <li>🏆 When all 13 books are claimed, whoever has the most wins. A tie is settled with a luck-based guessing round on a freshly shuffled pond.</li>
+            <li>🏆 When every set in play is claimed, whoever has the most books wins. A tie is settled by luck: one card is drawn at random and kept hidden, and tied players take turns guessing what it is — first correct guess wins!</li>
         </ul>
         <button id="rules-close-btn" class="secondary-btn" type="button">Got it!</button>
     </div>
@@ -161,7 +155,7 @@
 <div id="toast" class="toast"></div>
 <div id="set-popup" class="set-popup" hidden></div>
 
-<script src="assets/js/app.js"></script>
+<script src="assets/js/app.js?v=<?php echo filemtime(__DIR__ . '/assets/js/app.js'); ?>"></script>
 <script>GoFish.initGame();</script>
 </body>
 </html>

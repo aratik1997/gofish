@@ -260,22 +260,10 @@
         qs('scoreboard-btn').addEventListener('click', function () { qs('scoreboard-overlay').style.display = 'flex'; });
         qs('scoreboard-close-btn').addEventListener('click', function () { qs('scoreboard-overlay').style.display = 'none'; });
 
-        qs('menu-toggle-btn').addEventListener('click', function (e) {
-            e.stopPropagation();
-            qs('header-actions').classList.toggle('show');
-        });
-        qs('header-actions').addEventListener('click', function (e) {
-            if (e.target.closest('button')) qs('header-actions').classList.remove('show');
-        });
-        document.addEventListener('click', function (e) {
-            if (!qs('header-actions').contains(e.target) && e.target !== qs('menu-toggle-btn')) {
-                qs('header-actions').classList.remove('show');
-            }
-        });
-
-        qs('log-btn').addEventListener('click', openLog);
-        qs('log-close-btn').addEventListener('click', closeLog);
-        qs('log-backdrop').addEventListener('click', closeLog);
+        qs('chat-btn').addEventListener('click', openChat);
+        qs('lobby-chat-btn').addEventListener('click', openChat);
+        qs('chat-close-btn').addEventListener('click', closeChat);
+        qs('chat-backdrop').addEventListener('click', closeChat);
 
         qs('rules-btn').addEventListener('click', function () { qs('rules-overlay').style.display = 'flex'; });
         qs('lobby-rules-btn').addEventListener('click', function () { qs('rules-overlay').style.display = 'flex'; });
@@ -300,9 +288,9 @@
                 .finally(function () { btn.disabled = false; });
         });
 
-        qs('lobby-chat-form').addEventListener('submit', function (e) {
+        qs('chat-form').addEventListener('submit', function (e) {
             e.preventDefault();
-            var input = qs('lobby-chat-input');
+            var input = qs('chat-input');
             var msg = input.value.trim();
             if (!msg) return;
             input.value = '';
@@ -365,10 +353,10 @@
 
         handleEvent(game, players);
         requestAnimationFrame(updateLayoutVars);
+        renderChat(data.chat);
 
         qs('leave-btn').style.display = 'inline-block';
         qs('scoreboard-btn').style.display = (game.status === 'waiting') ? 'none' : 'inline-block';
-        qs('log-btn').style.display = (game.status === 'waiting') ? 'none' : 'inline-block';
         qs('new-round-btn').style.display = (me.is_host && game.status !== 'waiting') ? 'inline-block' : 'none';
         qs('turn-banner-wrap').style.display = (game.status === 'waiting') ? 'none' : 'flex';
         state.turnDeadlineTs = (game.status === 'playing' || game.status === 'tiebreak') ? game.turn_deadline_ts : null;
@@ -378,7 +366,6 @@
             showOnly('lobby');
             qs('spectator-banner').style.display = 'none';
             renderLobby(game, players, me);
-            renderChat(data.chat);
             return;
         }
 
@@ -474,11 +461,20 @@
     }
 
     function renderChat(chat) {
-        var log = qs('lobby-chat-log');
+        var log = qs('chat-log');
         log.innerHTML = (chat || []).map(function (m) {
             return '<div class="chat-msg"><strong>' + escapeHtml(m.name) + ':</strong>' + escapeHtml(m.message) + '</div>';
         }).join('');
         log.scrollTop = log.scrollHeight;
+    }
+
+    function openChat() {
+        qs('chat-panel').classList.add('show');
+        qs('chat-backdrop').classList.add('show');
+    }
+    function closeChat() {
+        qs('chat-panel').classList.remove('show');
+        qs('chat-backdrop').classList.remove('show');
     }
 
     function seatEmoji(name) {
@@ -722,7 +718,7 @@
         var setsEach = tiedPlayers[0] && tiedPlayers[0].books ? tiedPlayers[0].books.length : 0;
         qs('tiebreak-desc').innerHTML = 'Tied at <strong>' + setsEach +
             '</strong> sets each: <strong>' + names.map(escapeHtml).join(', ') + '</strong>. ' +
-            'Guess a fish, draw from the reset pond — match it and you win instantly!';
+            'One card has been drawn and kept hidden — guess it correctly to win instantly!';
 
         var currentId = game.tiebreak_player_ids[game.tiebreak_turn_index];
         var currentPlayer = players.find(function (p) { return p.id === currentId; });
@@ -864,34 +860,7 @@
                 break;
         }
 
-        if (msg) {
-            showToast(msg);
-            addLogEntry(msg);
-        }
-    }
-
-    function openLog() {
-        qs('log-panel').classList.add('show');
-        qs('log-backdrop').classList.add('show');
-    }
-    function closeLog() {
-        qs('log-panel').classList.remove('show');
-        qs('log-backdrop').classList.remove('show');
-    }
-
-    function addLogEntry(msg) {
-        var list = qs('log-list');
-        var empty = list.querySelector('.log-empty');
-        if (empty) empty.remove();
-        var time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        var entry = document.createElement('div');
-        entry.className = 'log-entry';
-        entry.innerHTML = '<span class="log-time">' + time + '</span>' + escapeHtml(msg);
-        list.appendChild(entry);
-        while (list.children.length > 200) {
-            list.removeChild(list.firstChild);
-        }
-        list.scrollTop = list.scrollHeight;
+        if (msg) showToast(msg);
     }
 
     var toastTimer = null;

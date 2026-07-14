@@ -31,8 +31,8 @@ foreach ($players as $p) {
 $isSpectator = $game['status'] !== 'waiting';
 if (!$isSpectator) {
     $playing = array_filter($players, fn($p) => !$p['is_spectator']);
-    if (count($playing) >= 6) {
-        json_error('This game is full (6 players max)');
+    if (count($playing) >= MAX_PLAYERS) {
+        json_error('This game is full (' . MAX_PLAYERS . ' players max)');
     }
 }
 

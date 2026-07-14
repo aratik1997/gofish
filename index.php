@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Go Fish — Pond Party</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎣</text></svg>">
-<link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/assets/css/style.css'); ?>">
 </head>
 <body class="landing-body">
 
@@ -13,7 +13,7 @@
 
 <main class="landing-card">
     <h1 class="landing-title">🎣 Go Fish <span class="subtitle">Pond Party</span></h1>
-    <p class="landing-tagline">Gather 2–6 anglers, cast your questions, and reel in four-of-a-kind sets.</p>
+    <p class="landing-tagline">Gather 2–10 anglers, cast your questions, and reel in four-of-a-kind sets.</p>
 
     <div class="tabs">
         <button class="tab-btn active" data-tab="create">Create Game</button>
@@ -37,7 +37,7 @@
     </form>
 </main>
 
-<script src="assets/js/app.js"></script>
+<script src="assets/js/app.js?v=<?php echo filemtime(__DIR__ . '/assets/js/app.js'); ?>"></script>
 <script>GoFish.initLanding();</script>
 </body>
 </html>

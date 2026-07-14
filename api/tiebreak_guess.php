@@ -22,7 +22,7 @@ $game = check_and_apply_timeout($pdo, $game);
 if ($game['status'] !== 'tiebreak') {
     json_error('No tiebreak in progress');
 }
-if (!is_valid_fish($guess)) {
+if (!is_valid_fish($guess, (int) $game['fish_set_count'])) {
     json_error('Unknown fish type');
 }
 

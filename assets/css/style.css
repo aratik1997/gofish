@@ -196,9 +196,6 @@ button {
     justify-content: space-between;
     padding: 12px 18px;
     background: rgba(6, 30, 38, 0.55);
-    /* No backdrop-filter here: it creates a stacking context on this element,
-       which would trap the header-actions dropdown below the toast/log-panel
-       no matter what z-index it's given. */
     z-index: 5;
     gap: 12px;
     flex-wrap: wrap;
@@ -210,14 +207,7 @@ button {
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-    position: relative;
 }
-
-/* Hidden on wide screens -- the action buttons render inline via display:contents.
-   Collapsed into a labeled dropdown only when the header gets too tight to read
-   (see the max-width:560px block below). */
-.menu-toggle-btn { display: none; }
-.header-actions { display: contents; }
 
 .room-code-badge {
     background: rgba(0,0,0,0.3);
@@ -734,13 +724,7 @@ button {
     font-weight: 700;
 }
 
-.lobby-chat {
-    margin-top: 16px;
-    text-align: left;
-    border-top: 1px solid var(--panel-border);
-    padding-top: 14px;
-}
-.lobby-chat-log {
+.chat-log {
     max-height: 130px;
     overflow-y: auto;
     display: flex;
@@ -749,19 +733,19 @@ button {
     margin-bottom: 8px;
     padding-right: 4px;
 }
-.lobby-chat-log .chat-msg {
+.chat-log .chat-msg {
     font-size: 12.5px;
     background: rgba(255,255,255,0.06);
     padding: 5px 9px;
     border-radius: 8px;
     word-break: break-word;
 }
-.lobby-chat-log .chat-msg strong { color: var(--gold); margin-right: 4px; }
-.lobby-chat-form {
+.chat-log .chat-msg strong { color: var(--gold); margin-right: 4px; }
+.chat-form {
     display: flex;
     gap: 6px;
 }
-.lobby-chat-form input {
+.chat-form input {
     flex: 1;
     padding: 9px 12px;
     border-radius: 9px;
@@ -880,9 +864,9 @@ button {
     margin-bottom: 18px;
 }
 
-/* ---------- Side game log ---------- */
+/* ---------- Side drawer (used for the in-game chat) ---------- */
 
-.log-backdrop {
+.side-backdrop {
     position: fixed;
     inset: 0;
     background: rgba(3, 20, 26, 0.55);
@@ -891,12 +875,12 @@ button {
     pointer-events: none;
     transition: opacity 0.25s;
 }
-.log-backdrop.show {
+.side-backdrop.show {
     opacity: 1;
     pointer-events: auto;
 }
 
-.log-panel {
+.side-panel {
     position: fixed;
     top: 0;
     right: 0;
@@ -911,11 +895,11 @@ button {
     transform: translateX(100%);
     transition: transform 0.25s ease;
 }
-.log-panel.show {
+.side-panel.show {
     transform: translateX(0);
 }
 
-.log-panel-header {
+.side-panel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -923,34 +907,17 @@ button {
     border-bottom: 1px solid var(--panel-border);
     flex-shrink: 0;
 }
-.log-panel-header h3 { margin: 0; font-size: 15px; }
+.side-panel-header h3 { margin: 0; font-size: 15px; }
 
-.log-list {
+.side-panel-log {
     flex: 1;
-    overflow-y: auto;
+    max-height: none;
     padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
 }
-.log-list .log-entry {
-    font-size: 12.5px;
-    background: rgba(255,255,255,0.06);
-    padding: 7px 10px;
-    border-radius: 8px;
-    line-height: 1.4;
-}
-.log-list .log-time {
-    color: var(--gold);
-    font-weight: 700;
-    margin-right: 6px;
-    font-size: 11px;
-}
-.log-list .log-empty {
-    color: #cfe7ec;
-    font-size: 13px;
-    text-align: center;
-    margin-top: 20px;
+.side-panel-form {
+    padding: 10px 12px;
+    border-top: 1px solid var(--panel-border);
+    margin: 0;
 }
 
 /* ---------- Rules modal ---------- */
@@ -1051,30 +1018,6 @@ input[type="text"] { font-size: 16px; }
     .icon-btn, .room-code-badge button { padding: 7px 10px; }
     .turn-banner { font-size: 12.5px; padding: 7px 12px; }
     .overlay-card { padding: 20px 16px; }
-
-    /* The header gets too tight for 4+ labeled icon buttons at this width --
-       collapse the secondary ones into a labeled dropdown instead of leaving
-       ambiguous unlabeled icons scattered across several wrapped rows. */
-    .menu-toggle-btn { display: inline-flex; align-items: center; gap: 4px; }
-    .header-actions {
-        display: none;
-        position: absolute;
-        top: calc(100% + 6px);
-        left: 0;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 6px;
-        background: var(--panel-bg);
-        border: 1px solid var(--panel-border);
-        border-radius: 12px;
-        padding: 8px;
-        min-width: 180px;
-        box-shadow: 0 12px 30px rgba(0,0,0,0.5);
-        z-index: 61; /* above the toast (60) -- an explicit tap should win over an ambient notification */
-    }
-    .header-actions.show { display: flex; }
-    .header-actions .icon-btn { justify-content: flex-start; width: 100%; }
-    .header-actions .btn-label { display: inline; }
 }
 
 /* Short viewports (phones in landscape): squeeze vertical chrome so the

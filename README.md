@@ -1,17 +1,17 @@
 # 🎣 Go Fish — Pond Party
 
-A real-time, online multiplayer Go Fish card game for 2–6 players, playable across separate devices in a browser. Players sit around a pond, ask each other for cards, and "fish" from the deck when they come up empty.
+A real-time, online multiplayer Go Fish card game for 2–10 players, playable across separate devices in a browser. Players sit around a pond, ask each other for cards, and "fish" from the deck when they come up empty.
 
 No build step, no framework, no WebSocket server — just PHP, SQLite, and a polling-based sync loop.
 
 ## Features
 
-- **2–6 player online lobbies** with shareable room codes
-- 13 fish-themed sets (shrimp, whale, turtle, clownfish, ...), each worth a "book" when a player collects all 4 of a kind
+- **2–10 player online lobbies** with shareable room codes
+- 13 fish-themed sets (shrimp, whale, turtle, clownfish, ...), each worth a "book" when a player collects all 4 of a kind — games with 7+ players add 2 extra sets per player above 6 (up to 21 sets) so there are enough cards to go around
 - Classic Go Fish flow: ask a player for a card you hold, they hand over all matching cards or send you fishing from the pond
 - **60-second turn timer** with automatic skip/resolution on timeout
 - Empty-handed players automatically redraw up to 5 cards from the pond, draw fewer if the pond is low, or get skipped if it's empty
-- **Luck-based tiebreaker**: tied leaders each guess a card drawn blind from a fresh deck
+- **Luck-based tiebreaker**: one card is drawn and kept hidden; tied leaders take turns guessing it, first correct guess wins
 - Host controls: kick players, mid-lobby chat, automatic host reassignment if the host leaves
 - Mid-game joiners spectate until the round ends, then join the next one
 - Live scoreboard, sorted by book count
@@ -50,11 +50,11 @@ Then open `http://127.0.0.1:8099/index.php`. The SQLite database (`data/gofish.s
 ## How to play
 
 1. One player creates a game and shares the room code.
-2. 2–6 players join the lobby; the host starts the game once everyone's in.
+2. 2–10 players join the lobby; the host starts the game once everyone's in.
 3. Each player starts with 5 cards. On your turn, ask any other player for a fish type you already hold at least one of.
 4. If they have it, they hand over every matching card. If not, you "Go Fish" — draw a card from the pond.
 5. Collecting all 4 of a fish type auto-extracts it as a scored book next to your name.
-6. When all 13 books are claimed, the player with the most books wins. Ties are settled in a luck-based guessing round.
+6. When every set in play is claimed, the player with the most books wins. Ties are settled in a luck-based guessing round.
 
 ## Project structure
 
