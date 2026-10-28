@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/cards.php';
 require_once __DIR__ . '/../includes/Game.php';
+require_once __DIR__ . '/../includes/Bots.php';
 
 $roomCode = trim((string) ($_GET['room_code'] ?? ''));
 $token = trim((string) ($_GET['token'] ?? ''));
@@ -37,6 +38,10 @@ try {
 
 $game = check_and_apply_timeout($pdo, $game);
 
+// Polled regularly by every player, so this is where a bot takes its move when it's due.
+advance_bots($pdo, $game);
+$game = fetch_game($pdo, (int) $game['id']);
+
 $players = all_players($pdo, (int) $game['id']);
 $deck = j_decode($game['deck']);
 $tiebreakDeck = j_decode($game['tiebreak_deck']);
@@ -53,6 +58,8 @@ foreach ($players as $p) {
         'hand_count' => count($hand),
         'books' => j_decode($p['books']),
         'connected' => (bool) $p['connected'],
+        'is_bot' => (bool) $p['is_bot'],
+        'bot_difficulty' => $p['bot_difficulty'],
     ];
 }
 

@@ -709,6 +709,21 @@ button {
     font-size: 11px;
     font-weight: 700;
 }
+.lobby-players li .bot-tag {
+    color: #ffd6a5;
+    font-size: 11px;
+    font-weight: 700;
+}
+.bot-controls {
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 10px 0;
+    flex-wrap: wrap;
+}
+.bot-controls select {
+    padding: 6px 8px;
+}
 .lobby-players li .li-left {
     display: flex;
     align-items: center;

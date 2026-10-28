@@ -243,6 +243,20 @@
                 .finally(function () { btn.disabled = false; });
         });
 
+        qs('add-bot-btn').addEventListener('click', function () {
+            var btn = qs('add-bot-btn');
+            if (btn.disabled) return;
+            btn.disabled = true;
+            post('add_bot.php', {
+                room_code: state.room,
+                token: state.session.token,
+                difficulty: qs('bot-difficulty').value
+            })
+                .then(poll)
+                .catch(function (err) { alert(err.message); })
+                .finally(function () { btn.disabled = false; });
+        });
+
         qs('go-fish-btn').addEventListener('click', function () {
             qs('go-fish-btn').disabled = true;
             post('go_fish.php', { room_code: state.room, token: state.session.token })
@@ -434,7 +448,8 @@
             left.className = 'li-left';
             left.innerHTML = '<span>' + escapeHtml(p.name) + (p.id === me.id ? ' (you)' : '') + '</span>' +
                 (p.is_host ? '<span class="host-tag">HOST</span>' : '') +
-                (p.is_spectator ? '<span class="spectator-tag">👀 SPECTATING</span>' : '');
+                (p.is_spectator ? '<span class="spectator-tag">👀 SPECTATING</span>' : '') +
+                (p.is_bot ? '<span class="bot-tag">🤖 ' + escapeHtml(p.bot_difficulty || 'bot') + '</span>' : '');
             li.appendChild(left);
             if (me.is_host && p.id !== me.id) {
                 var kickBtn = document.createElement('button');
@@ -449,6 +464,9 @@
         var startBtn = qs('start-game-btn');
         var waitMsg = qs('lobby-wait-msg');
         var playing = players.filter(function (p) { return !p.is_spectator; });
+        var botControls = qs('bot-controls');
+        botControls.style.display = me.is_host ? 'flex' : 'none';
+        qs('add-bot-btn').disabled = playing.length >= 10;
         if (me.is_host) {
             startBtn.style.display = 'inline-block';
             startBtn.disabled = playing.length < 2;

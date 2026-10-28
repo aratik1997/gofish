@@ -37,4 +37,13 @@ function migrate(PDO $pdo): void {
     if (!in_array('fish_set_count', $columns, true)) {
         $pdo->exec('ALTER TABLE games ADD COLUMN fish_set_count INTEGER NOT NULL DEFAULT 13');
     }
+    if (!in_array('bot_next_at', $columns, true)) {
+        $pdo->exec('ALTER TABLE games ADD COLUMN bot_next_at TEXT');
+    }
+
+    $playerColumns = $pdo->query('PRAGMA table_info(players)')->fetchAll(PDO::FETCH_COLUMN, 1);
+    if (!in_array('is_bot', $playerColumns, true)) {
+        $pdo->exec('ALTER TABLE players ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0');
+        $pdo->exec('ALTER TABLE players ADD COLUMN bot_difficulty TEXT');
+    }
 }

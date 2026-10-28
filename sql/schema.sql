@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS games (
     claimed_sets_by_left INTEGER NOT NULL DEFAULT 0, -- sets banked permanently when their owner left/was kicked
     winner_player_id INTEGER,
     fish_set_count INTEGER NOT NULL DEFAULT 13, -- how many fish types are in play this round (13 base + 2 per player above 6)
+    bot_next_at TEXT,                          -- when the bot whose turn it is (or who must respond) acts next (PHP local time)
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -36,6 +37,8 @@ CREATE TABLE IF NOT EXISTS players (
     hand TEXT NOT NULL DEFAULT '[]',   -- JSON array of fish-type strings
     books TEXT NOT NULL DEFAULT '[]',  -- JSON array of fish-type strings (completed sets, one entry per set)
     connected INTEGER NOT NULL DEFAULT 1,
+    is_bot INTEGER NOT NULL DEFAULT 0,
+    bot_difficulty TEXT,                     -- easy | medium | hard (bots only)
     last_seen TEXT NOT NULL DEFAULT (datetime('now')),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

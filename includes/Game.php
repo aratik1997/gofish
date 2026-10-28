@@ -195,6 +195,67 @@ function start_next_turn(PDO $pdo, int $gameId, int $playerId, array $deck): arr
 }
 
 /**
+ * Carries out an ask that has already been validated: the target hands over every copy of $fish if
+ * they have any, otherwise the asker is sent fishing. Shared by the ask_card.php endpoint and by bot
+ * players. Runs inside the caller's transaction, so it never begins or commits one itself.
+ */
+function perform_ask(PDO $pdo, array $game, array $asker, array $target, string $fish): void {
+    $askerHand = j_decode($asker['hand']);
+    $targetHand = j_decode($target['hand']);
+    $matchCount = count(array_filter($targetHand, fn($f) => $f === $fish));
+
+    if ($matchCount > 0) {
+        // Target hands over every card of that type.
+        $targetHand = array_values(array_filter($targetHand, fn($f) => $f !== $fish));
+        for ($i = 0; $i < $matchCount; $i++) {
+            $askerHand[] = $fish;
+        }
+        save_player($pdo, (int) $target['id'], $targetHand, j_decode($target['books']));
+
+        // If handing those cards over emptied the target's whole hand, they
+        // refill immediately -- at any cost, they don't wait for their own turn.
+        $deck = j_decode($game['deck']);
+        if (count($targetHand) === 0) {
+            refill_if_empty($pdo, (int) $game['id'], (int) $target['id'], $deck);
+        }
+
+        [$askerHand, $setsFormed] = extract_books($askerHand);
+        $askerBooks = j_decode($asker['books']);
+        foreach ($setsFormed as $s) {
+            $askerBooks[] = $s;
+        }
+        save_player($pdo, (int) $asker['id'], $askerHand, $askerBooks);
+
+        push_event($pdo, (int) $game['id'], [
+            'type' => 'caught',
+            'asker_id' => (int) $asker['id'],
+            'target_id' => (int) $target['id'],
+            'fish' => $fish,
+            'count' => $matchCount,
+            'sets_formed' => $setsFormed,
+        ]);
+
+        // The asker keeps their turn — but route through start_next_turn so that
+        // if the catch cleaned out their entire hand (e.g. it completed a set
+        // using every card they had), they still refill from the pond or get
+        // skipped, instead of being left stuck with an empty hand.
+        start_next_turn($pdo, (int) $game['id'], (int) $asker['id'], $deck);
+
+        check_game_end($pdo, fetch_game($pdo, (int) $game['id']));
+    } else {
+        $stmt = $pdo->prepare('UPDATE games SET turn_state = ?, turn_deadline = ?, pending_asker_id = ?, pending_target_id = ?, pending_fish = ?, updated_at = datetime("now") WHERE id = ?');
+        $stmt->execute(['awaiting_gofish', new_turn_deadline(), $asker['id'], $target['id'], $fish, $game['id']]);
+
+        push_event($pdo, (int) $game['id'], [
+            'type' => 'go_fish_prompt',
+            'asker_id' => (int) $asker['id'],
+            'target_id' => (int) $target['id'],
+            'fish' => $fish,
+        ]);
+    }
+}
+
+/**
  * Resolve a pending "go fish" draw for the asker named in $game (shared by
  * the go_fish.php endpoint and by the 60-second timeout auto-resolver).
  */

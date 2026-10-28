@@ -35,6 +35,16 @@
         <h2>🎣 Waiting for anglers…</h2>
         <p class="lobby-hint">Share the room code <strong id="lobby-room-code">----</strong> with friends (2–10 players).</p>
         <ul id="lobby-players" class="lobby-players"></ul>
+        <div id="bot-controls" class="bot-controls" style="display:none">
+            <label>Add a bot
+                <select id="bot-difficulty">
+                    <option value="easy">Easy</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="hard">Hard</option>
+                </select>
+            </label>
+            <button id="add-bot-btn" class="secondary-btn" type="button">🤖 Add Bot</button>
+        </div>
         <button id="start-game-btn" class="primary-btn" style="display:none">Start Game</button>
         <p id="lobby-wait-msg" class="lobby-hint">Waiting for the host to start the game…</p>
 
