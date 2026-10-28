@@ -736,7 +736,7 @@
         var setsEach = tiedPlayers[0] && tiedPlayers[0].books ? tiedPlayers[0].books.length : 0;
         qs('tiebreak-desc').innerHTML = 'Tied at <strong>' + setsEach +
             '</strong> sets each: <strong>' + names.map(escapeHtml).join(', ') + '</strong>. ' +
-            'One card has been drawn and kept hidden — guess it correctly to win instantly!';
+            'Guess a fish, draw from the reset pond — match it and you win instantly!';
 
         var currentId = game.tiebreak_player_ids[game.tiebreak_turn_index];
         var currentPlayer = players.find(function (p) { return p.id === currentId; });

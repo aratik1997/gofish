@@ -1,171 +1,526 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Go Fish — Pond Party</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎣</text></svg>">
-<link rel="stylesheet" href="assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/assets/css/style.css'); ?>">
-</head>
-<body class="game-body">
+<?php
+declare(strict_types=1);
 
-<div class="pond-backdrop"></div>
+require_once __DIR__ . '/cards.php';
+require_once __DIR__ . '/functions.php';
 
-<header class="game-header">
-    <div class="header-left">
-        <div class="room-code-badge">Room <strong id="room-code-label">----</strong>
-            <button id="copy-room" type="button" title="Copy invite link">📋<span class="btn-label"> Copy Invite</span></button>
-        </div>
-        <button id="scoreboard-btn" class="icon-btn" type="button" style="display:none" title="Scoreboard">🏆<span class="btn-label"> Scores</span></button>
-        <button id="chat-btn" class="icon-btn" type="button" title="Chat">💬<span class="btn-label"> Chat</span></button>
-        <button id="rules-btn" class="icon-btn" type="button" title="How to Play">📖<span class="btn-label"> Rules</span></button>
-        <button id="new-round-btn" class="icon-btn" type="button" style="display:none" title="Restart with a fresh round">🔄<span class="btn-label"> New Round</span></button>
-    </div>
-    <div id="turn-banner-wrap" class="turn-banner-wrap">
-        <div id="turn-banner" class="turn-banner">Loading pond…</div>
-        <div id="turn-timer" class="turn-timer" style="display:none"></div>
-    </div>
-    <button id="leave-btn" class="icon-btn leave-btn" type="button" title="Leave">🚪<span class="btn-label"> Leave</span></button>
-</header>
+/**
+ * Remove completed 4-of-a-kind sets from a hand.
+ * Returns [newHand, setsFormed] where setsFormed is a list of fish keys.
+ */
+function extract_books(array $hand): array {
+    $counts = array_count_values($hand);
+    $setsFormed = [];
+    foreach ($counts as $fish => $count) {
+        if ($count >= 4) {
+            $setsFormed[] = $fish;
+        }
+    }
+    if (empty($setsFormed)) {
+        return [$hand, []];
+    }
+    $newHand = array_values(array_filter($hand, function ($f) use ($setsFormed) {
+        return !in_array($f, $setsFormed, true);
+    }));
+    return [$newHand, $setsFormed];
+}
 
-<div id="spectator-banner" class="spectator-banner" style="display:none">👀 You're spectating — you'll join in the next round</div>
+function next_seat_player(array $players, int $currentPlayerId): array {
+    $ids = array_column($players, 'id');
+    $idx = array_search($currentPlayerId, $ids, true);
+    if ($idx === false) {
+        return $players[0];
+    }
+    $nextIdx = ($idx + 1) % count($players);
+    return $players[$nextIdx];
+}
 
-<section id="lobby-overlay" class="overlay">
-    <div class="overlay-card">
-        <h2>🎣 Waiting for anglers…</h2>
-        <p class="lobby-hint">Share the room code <strong id="lobby-room-code">----</strong> with friends (2–10 players).</p>
-        <ul id="lobby-players" class="lobby-players"></ul>
-        <div id="bot-controls" class="bot-controls" style="display:none">
-            <label>Add a bot
-                <select id="bot-difficulty">
-                    <option value="easy">Easy</option>
-                    <option value="medium" selected>Medium</option>
-                    <option value="hard">Hard</option>
-                </select>
-            </label>
-            <button id="add-bot-btn" class="secondary-btn" type="button">🤖 Add Bot</button>
-        </div>
-        <button id="start-game-btn" class="primary-btn" style="display:none">Start Game</button>
-        <p id="lobby-wait-msg" class="lobby-hint">Waiting for the host to start the game…</p>
+function save_player(PDO $pdo, int $playerId, array $hand, array $books): void {
+    $stmt = $pdo->prepare('UPDATE players SET hand = ?, books = ? WHERE id = ?');
+    $stmt->execute([j_encode($hand), j_encode($books), $playerId]);
+}
 
-        <div class="lobby-actions">
-            <button id="lobby-chat-btn" class="secondary-btn" type="button">💬 Chat</button>
-            <button id="lobby-rules-btn" class="secondary-btn" type="button">📖 How to Play</button>
-            <button id="lobby-leave-btn" class="secondary-btn" type="button">Leave Lobby</button>
-        </div>
-    </div>
-</section>
+function push_event(PDO $pdo, int $gameId, array $event): void {
+    $stmt = $pdo->prepare('UPDATE games SET last_event = ?, event_seq = event_seq + 1, updated_at = datetime("now") WHERE id = ?');
+    $stmt->execute([j_encode($event), $gameId]);
+}
 
-<main id="game-table" class="game-table" style="display:none">
-    <div class="table-ring" id="table-ring">
-        <div class="pond" id="pond">
-            <div class="pond-water"></div>
-            <div class="pond-ripple"></div>
-            <div class="deck-pile" id="deck-pile">
-                <div class="card-back"></div>
-                <div class="card-back card-back-2"></div>
-                <div class="deck-count-badge">🐟 <span id="deck-count">0</span></div>
-            </div>
-            <div id="fishing-line" class="fishing-line" hidden></div>
-        </div>
-        <div id="seats-layer" class="seats-layer"></div>
-    </div>
-</main>
+function fetch_game(PDO $pdo, int $gameId): array {
+    $stmt = $pdo->prepare('SELECT * FROM games WHERE id = ?');
+    $stmt->execute([$gameId]);
+    return $stmt->fetch();
+}
 
-<section id="hand-area" class="hand-area" style="display:none">
-    <div class="hand-label">
-        <span>Your Hand <span id="my-books" class="seat-books my-books"></span></span>
-        <span id="ask-hint" class="ask-hint">Tap a card, then tap a player to ask them for it</span>
-    </div>
-    <div id="hand-cards" class="hand-cards"></div>
-</section>
+/**
+ * A player whose hand is empty draws back up to 5 cards from the pond (or
+ * every remaining card, if fewer than 5 are left). Mutates $deck in place.
+ * Returns [newHand, newBooks, setsFormed, drawnCount].
+ */
+function refill_hand_from_deck(array $hand, array $books, array &$deck): array {
+    if (count($hand) !== 0 || count($deck) === 0) {
+        return [$hand, $books, [], 0];
+    }
+    $take = min(5, count($deck));
+    for ($i = 0; $i < $take; $i++) {
+        $hand[] = array_pop($deck);
+    }
+    [$hand, $setsFormed] = extract_books($hand);
+    foreach ($setsFormed as $fish) {
+        $books[] = $fish;
+    }
+    return [$hand, $books, $setsFormed, $take];
+}
 
-<button id="go-fish-btn" class="go-fish-btn" style="display:none" type="button">
-    <span class="go-fish-icon">🐟</span> Go Fish!
-</button>
+/**
+ * If $playerId's hand is currently empty, immediately refill it from the
+ * pond (up to 5 cards, or all that remain) -- regardless of whose turn it
+ * is. Used e.g. when handing over cards to an asker leaves a player with
+ * nothing left; they don't have to wait for their own turn to draw back up.
+ * Mutates $deck by reference and persists both the player and the game row.
+ */
+function refill_if_empty(PDO $pdo, int $gameId, int $playerId, array &$deck): void {
+    $stmt = $pdo->prepare('SELECT * FROM players WHERE id = ?');
+    $stmt->execute([$playerId]);
+    $player = $stmt->fetch();
+    if (!$player) {
+        return;
+    }
+    $hand = j_decode($player['hand']);
+    $books = j_decode($player['books']);
+    [$hand, $books, $setsFormed, $drawnCount] = refill_hand_from_deck($hand, $books, $deck);
+    if ($drawnCount === 0) {
+        return;
+    }
+    save_player($pdo, $playerId, $hand, $books);
+    if (!empty($setsFormed)) {
+        push_event($pdo, $gameId, ['type' => 'set_completed', 'player_id' => $playerId, 'sets' => $setsFormed, 'via' => 'refill']);
+    }
+    $stmt = $pdo->prepare('UPDATE games SET deck = ?, updated_at = datetime("now") WHERE id = ?');
+    $stmt->execute([j_encode($deck), $gameId]);
+}
 
-<div id="ask-confirm" class="ask-confirm" style="display:none">
-    <span id="ask-confirm-text"></span>
-    <button id="ask-confirm-btn" class="primary-btn small">Ask!</button>
-    <button id="ask-cancel-btn" class="secondary-btn small">Cancel</button>
-</div>
+/**
+ * Check whether every set in play this round has been claimed. If so, moves
+ * the game to 'finished' (outright winner) or 'tiebreak' (luck round among
+ * leaders). How many sets are in play varies with player count (see
+ * fish_set_count_for()), so this reads it from the game row rather than
+ * assuming the base 13.
+ */
+function check_game_end(PDO $pdo, array $game): void {
+    $players = playing_players($pdo, (int) $game['id']);
+    $setCount = (int) $game['fish_set_count'];
+    $totalSets = (int) $game['claimed_sets_by_left'];
+    $maxSets = -1;
+    $leaders = [];
+    foreach ($players as $p) {
+        $books = j_decode($p['books']);
+        $n = count($books);
+        $totalSets += $n;
+        if ($n > $maxSets) {
+            $maxSets = $n;
+            $leaders = [$p];
+        } elseif ($n === $maxSets) {
+            $leaders[] = $p;
+        }
+    }
 
-<section id="scoreboard-overlay" class="overlay" style="display:none">
-    <div class="overlay-card">
-        <h2>🏆 Scoreboard</h2>
-        <ol id="scoreboard-list" class="scoreboard-list"></ol>
-        <button id="scoreboard-close-btn" class="secondary-btn" type="button">Close</button>
-    </div>
-</section>
+    if ($totalSets < $setCount || empty($players)) {
+        return;
+    }
 
-<section id="tiebreak-overlay" class="overlay" style="display:none">
-    <div class="overlay-card">
-        <h2>🍀 Tiebreaker — Trust Your Luck!</h2>
-        <p id="tiebreak-desc" class="lobby-hint"></p>
-        <div id="tiebreak-players" class="lobby-players"></div>
-        <div id="tiebreak-guess-area">
-            <p id="tiebreak-turn-msg" class="lobby-hint"></p>
-            <div id="tiebreak-fish-grid" class="fish-grid"></div>
-        </div>
-        <div id="tiebreak-log" class="tiebreak-log"></div>
-    </div>
-</section>
+    if (count($leaders) === 1) {
+        $stmt = $pdo->prepare('UPDATE games SET status = ?, winner_player_id = ?, turn_deadline = NULL, updated_at = datetime("now") WHERE id = ?');
+        $stmt->execute(['finished', $leaders[0]['id'], $game['id']]);
+        push_event($pdo, (int) $game['id'], ['type' => 'game_finished', 'winner_id' => (int) $leaders[0]['id']]);
+    } else {
+        $leaderIds = array_map(fn($p) => (int) $p['id'], $leaders);
+        $stmt = $pdo->prepare('UPDATE games SET status = ?, tiebreak_player_ids = ?, tiebreak_deck = ?, tiebreak_turn_index = 0, turn_deadline = ?, updated_at = datetime("now") WHERE id = ?');
+        $stmt->execute(['tiebreak', j_encode($leaderIds), j_encode(build_deck($setCount)), new_turn_deadline(), $game['id']]);
+        push_event($pdo, (int) $game['id'], ['type' => 'tiebreak_start', 'player_ids' => $leaderIds]);
+    }
+}
 
-<section id="winner-overlay" class="overlay" style="display:none">
-    <div class="overlay-card winner-card">
-        <h2 id="winner-title">🏆 We have a winner!</h2>
-        <div id="winner-name" class="winner-name"></div>
-        <div id="winner-books" class="winner-books"></div>
-        <div class="winner-actions">
-            <button id="play-again-btn" class="primary-btn" type="button" style="display:none">Play Again</button>
-            <p id="play-again-wait" class="lobby-hint" style="display:none">Waiting for the host to start a new round…</p>
-            <a href="index.php" class="secondary-btn">Leave Room</a>
-        </div>
-    </div>
-</section>
+/**
+ * Assigns the turn to $playerId. If their hand is empty they refill from
+ * the pond (up to 5 cards, or all that remain). If the pond is also empty,
+ * they have nothing to play with and are skipped — this repeats around the
+ * table until a player who can act is found.
+ */
+function start_next_turn(PDO $pdo, int $gameId, int $playerId, array $deck): array {
+    $players = playing_players($pdo, $gameId);
+    if (empty($players)) {
+        return $deck;
+    }
+    $ids = array_column($players, 'id');
+    $idx = array_search($playerId, $ids, true);
+    if ($idx === false) {
+        $idx = 0;
+    }
 
-<section id="kicked-overlay" class="overlay" style="display:none">
-    <div class="overlay-card">
-        <h2 id="kicked-title">You were removed</h2>
-        <p id="kicked-msg" class="lobby-hint"></p>
-        <a href="index.php" class="primary-btn">Back to Lobby List</a>
-    </div>
-</section>
+    $candidateId = (int) $ids[$idx];
+    for ($i = 0; $i <= count($players); $i++) {
+        $tryId = (int) $ids[$idx];
+        $stmt = $pdo->prepare('SELECT * FROM players WHERE id = ?');
+        $stmt->execute([$tryId]);
+        $player = $stmt->fetch();
+        $hand = j_decode($player['hand']);
+        $books = j_decode($player['books']);
 
-<div id="chat-backdrop" class="side-backdrop"></div>
-<aside id="chat-panel" class="side-panel">
-    <div class="side-panel-header">
-        <h3>💬 Chat</h3>
-        <button id="chat-close-btn" class="icon-btn" type="button">✕</button>
-    </div>
-    <div id="chat-log" class="chat-log side-panel-log"></div>
-    <form id="chat-form" class="chat-form side-panel-form">
-        <input id="chat-input" type="text" maxlength="200" placeholder="Say something…" autocomplete="off">
-        <button type="submit" class="primary-btn small">Send</button>
-    </form>
-</aside>
+        if (count($hand) === 0) {
+            [$hand, $books, $setsFormed, $drawnCount] = refill_hand_from_deck($hand, $books, $deck);
+            if ($drawnCount > 0) {
+                save_player($pdo, $tryId, $hand, $books);
+                if (!empty($setsFormed)) {
+                    push_event($pdo, $gameId, ['type' => 'set_completed', 'player_id' => $tryId, 'sets' => $setsFormed, 'via' => 'refill']);
+                }
+            }
+        }
 
-<section id="rules-overlay" class="overlay" style="display:none">
-    <div class="overlay-card rules-card">
-        <h2>📖 How to Play</h2>
-        <ul class="rules-list">
-            <li>🎣 2–10 players. Each player starts with 5 cards from the pond. Games with 7+ players use extra fish types so there are enough cards to go around.</li>
-            <li>🐟 On your turn, ask any other player for a fish type you already hold at least one of.</li>
-            <li>🤝 If they have it, they must hand over <strong>every</strong> card of that type. You keep your turn and can ask again.</li>
-            <li>🎣 If they don't have it, press <strong>Go Fish!</strong> to draw a card from the pond. Either way, your turn ends after — even if you happen to draw the exact card you asked for.</li>
-            <li>📚 Collecting all 4 of a fish type auto-extracts it as a scored "book" next to your name.</li>
-            <li>♻️ If your hand ever hits 0 cards, you immediately redraw up to 5 from the pond (fewer if the pond is low, or you're skipped if it's empty) — you don't have to wait for your turn.</li>
-            <li>⏱️ You have 60 seconds per turn/response — run out of time and it auto-resolves or skips.</li>
-            <li>🏆 When every set in play is claimed, whoever has the most books wins. A tie is settled by luck: one card is drawn at random and kept hidden, and tied players take turns guessing what it is — first correct guess wins!</li>
-        </ul>
-        <button id="rules-close-btn" class="secondary-btn" type="button">Got it!</button>
-    </div>
-</section>
+        $candidateId = $tryId;
+        if (count($hand) > 0) {
+            break; // this player can act — the pond was empty for everyone skipped before them
+        }
+        $idx = ($idx + 1) % count($players);
+    }
 
-<div id="toast" class="toast"></div>
-<div id="set-popup" class="set-popup" hidden></div>
+    $stmt = $pdo->prepare('UPDATE games SET turn_player_id = ?, turn_state = ?, turn_deadline = ?, pending_asker_id = NULL, pending_target_id = NULL, pending_fish = NULL, deck = ?, updated_at = datetime("now") WHERE id = ?');
+    $stmt->execute([$candidateId, 'awaiting_ask', new_turn_deadline(), j_encode($deck), $gameId]);
 
-<script src="assets/js/app.js?v=<?php echo filemtime(__DIR__ . '/assets/js/app.js'); ?>"></script>
-<script>GoFish.initGame();</script>
-</body>
-</html>
+    return $deck;
+}
+
+/**
+ * Carries out an ask that has already been validated: the target hands over every copy of $fish if
+ * they have any, otherwise the asker is sent fishing. Shared by the ask_card.php endpoint and by bot
+ * players. Runs inside the caller's transaction, so it never begins or commits one itself.
+ */
+function perform_ask(PDO $pdo, array $game, array $asker, array $target, string $fish): void {
+    $askerHand = j_decode($asker['hand']);
+    $targetHand = j_decode($target['hand']);
+    $matchCount = count(array_filter($targetHand, fn($f) => $f === $fish));
+
+    if ($matchCount > 0) {
+        // Target hands over every card of that type.
+        $targetHand = array_values(array_filter($targetHand, fn($f) => $f !== $fish));
+        for ($i = 0; $i < $matchCount; $i++) {
+            $askerHand[] = $fish;
+        }
+        save_player($pdo, (int) $target['id'], $targetHand, j_decode($target['books']));
+
+        // If handing those cards over emptied the target's whole hand, they
+        // refill immediately -- at any cost, they don't wait for their own turn.
+        $deck = j_decode($game['deck']);
+        if (count($targetHand) === 0) {
+            refill_if_empty($pdo, (int) $game['id'], (int) $target['id'], $deck);
+        }
+
+        [$askerHand, $setsFormed] = extract_books($askerHand);
+        $askerBooks = j_decode($asker['books']);
+        foreach ($setsFormed as $s) {
+            $askerBooks[] = $s;
+        }
+        save_player($pdo, (int) $asker['id'], $askerHand, $askerBooks);
+
+        push_event($pdo, (int) $game['id'], [
+            'type' => 'caught',
+            'asker_id' => (int) $asker['id'],
+            'target_id' => (int) $target['id'],
+            'fish' => $fish,
+            'count' => $matchCount,
+            'sets_formed' => $setsFormed,
+        ]);
+
+        // The asker keeps their turn — but route through start_next_turn so that
+        // if the catch cleaned out their entire hand (e.g. it completed a set
+        // using every card they had), they still refill from the pond or get
+        // skipped, instead of being left stuck with an empty hand.
+        start_next_turn($pdo, (int) $game['id'], (int) $asker['id'], $deck);
+
+        check_game_end($pdo, fetch_game($pdo, (int) $game['id']));
+    } else {
+        $stmt = $pdo->prepare('UPDATE games SET turn_state = ?, turn_deadline = ?, pending_asker_id = ?, pending_target_id = ?, pending_fish = ?, updated_at = datetime("now") WHERE id = ?');
+        $stmt->execute(['awaiting_gofish', new_turn_deadline(), $asker['id'], $target['id'], $fish, $game['id']]);
+
+        push_event($pdo, (int) $game['id'], [
+            'type' => 'go_fish_prompt',
+            'asker_id' => (int) $asker['id'],
+            'target_id' => (int) $target['id'],
+            'fish' => $fish,
+        ]);
+    }
+}
+
+/**
+ * Resolve a pending "go fish" draw for the asker named in $game (shared by
+ * the go_fish.php endpoint and by the 60-second timeout auto-resolver).
+ */
+function resolve_go_fish(PDO $pdo, array $game, bool $timedOut = false): void {
+    $askerId = (int) $game['pending_asker_id'];
+    $fish = (string) $game['pending_fish'];
+    $targetId = (int) $game['pending_target_id'];
+
+    $stmt = $pdo->prepare('SELECT * FROM players WHERE id = ?');
+    $stmt->execute([$askerId]);
+    $asker = $stmt->fetch();
+    if (!$asker) {
+        // Asker left mid-exchange; just clear the pending state and move on.
+        $players = playing_players($pdo, (int) $game['id']);
+        if (!empty($players)) {
+            start_next_turn($pdo, (int) $game['id'], (int) $players[0]['id'], j_decode($game['deck']));
+        }
+        return;
+    }
+
+    $deck = j_decode($game['deck']);
+    $drawn = null;
+    $matched = false;
+    $setsFormed = [];
+    if (count($deck) > 0) {
+        $drawn = array_pop($deck);
+        $matched = ($drawn === $fish);
+
+        $askerHand = j_decode($asker['hand']);
+        $askerHand[] = $drawn;
+        [$askerHand, $setsFormed] = extract_books($askerHand);
+        $askerBooks = j_decode($asker['books']);
+        foreach ($setsFormed as $s) {
+            $askerBooks[] = $s;
+        }
+        save_player($pdo, $askerId, $askerHand, $askerBooks);
+
+        // If that draw completed a set using the asker's entire hand, they
+        // refill immediately -- at any cost. The turn passes to the next
+        // player regardless of match (see below), so without this they'd
+        // otherwise sit at 0 cards until their turn comes back around.
+        if (count($askerHand) === 0) {
+            refill_if_empty($pdo, (int) $game['id'], $askerId, $deck);
+        }
+    }
+
+    $stmt = $pdo->prepare('UPDATE games SET deck = ?, updated_at = datetime("now") WHERE id = ?');
+    $stmt->execute([j_encode($deck), $game['id']]);
+
+    push_event($pdo, (int) $game['id'], [
+        'type' => 'go_fish_result',
+        'asker_id' => $askerId,
+        'target_id' => $targetId,
+        'fish' => $fish,
+        'matched' => $matched,
+        'sets_formed' => $setsFormed,
+        'pond_empty' => count($deck) === 0 && $drawn === null,
+        'timed_out' => $timedOut,
+    ]);
+
+    $players = playing_players($pdo, (int) $game['id']);
+    if (empty($players)) {
+        return;
+    }
+    // Drawing from the pond always ends the turn -- even if the draw matches
+    // the asked-for fish or completes a set, the asker does not go again.
+    $refIds = array_column($players, 'id');
+    $refId = in_array($askerId, $refIds, true) ? $askerId : $players[0]['id'];
+    $next = next_seat_player($players, (int) $refId);
+    $deck = start_next_turn($pdo, (int) $game['id'], (int) $next['id'], $deck);
+
+    $freshGame = fetch_game($pdo, (int) $game['id']);
+    check_game_end($pdo, $freshGame);
+}
+
+/**
+ * Resolve a tiebreak guess (shared by the tiebreak_guess.php endpoint and
+ * the 60-second timeout auto-resolver, which supplies a random guess).
+ */
+function resolve_tiebreak_guess(PDO $pdo, array $game, int $playerId, string $guess, bool $timedOut = false): void {
+    $tiebreakIds = j_decode($game['tiebreak_player_ids']);
+    $deck = j_decode($game['tiebreak_deck']);
+
+    if (count($deck) === 0) {
+        $deck = build_deck((int) $game['fish_set_count']);
+    }
+    $drawn = array_pop($deck);
+    $matched = ($drawn === $guess);
+
+    // Folded into one event (rather than a separate game_finished push) so the
+    // winning guess can't get silently overwritten before a client polls it.
+    push_event($pdo, (int) $game['id'], [
+        'type' => 'tiebreak_guess',
+        'player_id' => $playerId,
+        'guess' => $guess,
+        'drawn' => $drawn,
+        'matched' => $matched,
+        'timed_out' => $timedOut,
+        'winner_id' => $matched ? $playerId : null,
+    ]);
+
+    if ($matched) {
+        $stmt = $pdo->prepare('UPDATE games SET status = ?, winner_player_id = ?, tiebreak_deck = ?, turn_deadline = NULL, updated_at = datetime("now") WHERE id = ?');
+        $stmt->execute(['finished', $playerId, j_encode($deck), $game['id']]);
+        return;
+    }
+
+    $turnIdx = (int) $game['tiebreak_turn_index'];
+    $nextIdx = count($tiebreakIds) > 0 ? ($turnIdx + 1) % count($tiebreakIds) : 0;
+    $stmt = $pdo->prepare('UPDATE games SET tiebreak_deck = ?, tiebreak_turn_index = ?, turn_deadline = ?, updated_at = datetime("now") WHERE id = ?');
+    $stmt->execute([j_encode($deck), $nextIdx, new_turn_deadline(), $game['id']]);
+}
+
+/**
+ * Applies the 60-second turn/response/guess timeout if it has passed.
+ * Safe to call on every poll: the UPDATE's WHERE clause only lets one
+ * concurrent request actually perform the resolution.
+ */
+function check_and_apply_timeout(PDO $pdo, array $game): array {
+    if (!in_array($game['status'], ['playing', 'tiebreak'], true)) {
+        return $game;
+    }
+    if (empty($game['turn_deadline'])) {
+        return $game;
+    }
+    if (strtotime($game['turn_deadline']) > time()) {
+        return $game;
+    }
+
+    // Claim the timeout: only one concurrent request will affect a row here.
+    // This whole block runs on every single poll from every player, so a busy
+    // database is swallowed rather than failing the request -- the same check
+    // simply runs again on the next poll a moment later.
+    try {
+        $stmt = $pdo->prepare('UPDATE games SET turn_deadline = NULL WHERE id = ? AND turn_deadline = ?');
+        $stmt->execute([$game['id'], $game['turn_deadline']]);
+        if ($stmt->rowCount() === 0) {
+            return fetch_game($pdo, (int) $game['id']);
+        }
+
+        if ($game['status'] === 'tiebreak') {
+            $tiebreakIds = j_decode($game['tiebreak_player_ids']);
+            $turnIdx = (int) $game['tiebreak_turn_index'];
+            if (isset($tiebreakIds[$turnIdx])) {
+                $playerId = (int) $tiebreakIds[$turnIdx];
+                $activeKeys = active_fish_keys((int) $game['fish_set_count']);
+                $randomGuess = $activeKeys[array_rand($activeKeys)];
+                resolve_tiebreak_guess($pdo, $game, $playerId, $randomGuess, true);
+            }
+        } elseif ($game['turn_state'] === 'awaiting_gofish') {
+            resolve_go_fish($pdo, $game, true);
+        } elseif ($game['turn_state'] === 'awaiting_ask') {
+            $players = playing_players($pdo, (int) $game['id']);
+            if (!empty($players)) {
+                $refIds = array_column($players, 'id');
+                $currentId = (int) $game['turn_player_id'];
+                $refId = in_array($currentId, $refIds, true) ? $currentId : $players[0]['id'];
+                $next = next_seat_player($players, (int) $refId);
+                push_event($pdo, (int) $game['id'], ['type' => 'turn_timeout', 'player_id' => $currentId]);
+                start_next_turn($pdo, (int) $game['id'], (int) $next['id'], j_decode($game['deck']));
+                $freshGame = fetch_game($pdo, (int) $game['id']);
+                check_game_end($pdo, $freshGame);
+            }
+        }
+    } catch (Throwable $e) {
+        if (is_db_busy_error($e)) {
+            return fetch_game($pdo, (int) $game['id']);
+        }
+        throw $e;
+    }
+
+    return fetch_game($pdo, (int) $game['id']);
+}
+
+/**
+ * Removes a player from the game (voluntary leave or host kick):
+ *  - their hand cards are shuffled back into the pond deck
+ *  - their claimed sets are permanently banked out of play
+ *  - if they held the turn (or were mid ask/go-fish), the turn advances
+ *  - if they were the host, a random remaining player becomes host
+ */
+function remove_player_from_game(PDO $pdo, array $game, array $target, string $reason, ?string $byName): void {
+    $gameId = (int) $game['id'];
+    $targetId = (int) $target['id'];
+
+    if (in_array($game['status'], ['playing', 'tiebreak'], true) && !$target['is_spectator']) {
+        $deck = j_decode($game['deck']);
+        $hand = j_decode($target['hand']);
+        foreach ($hand as $card) {
+            $deck[] = $card;
+        }
+        shuffle($deck);
+        $books = j_decode($target['books']);
+        $stmt = $pdo->prepare('UPDATE games SET deck = ?, claimed_sets_by_left = claimed_sets_by_left + ? WHERE id = ?');
+        $stmt->execute([j_encode($deck), count($books), $gameId]);
+        $game = fetch_game($pdo, $gameId);
+    }
+
+    $stmt = $pdo->prepare('UPDATE players SET status = ?, left_by = ?, hand = "[]", books = "[]" WHERE id = ?');
+    $stmt->execute([$reason, $byName, $targetId]);
+
+    $newHostName = null;
+    if ($target['is_host']) {
+        $stmt = $pdo->prepare('SELECT * FROM players WHERE game_id = ? AND status = "active" AND id != ? ORDER BY RANDOM() LIMIT 1');
+        $stmt->execute([$gameId, $targetId]);
+        $newHost = $stmt->fetch();
+        if ($newHost) {
+            $pdo->prepare('UPDATE players SET is_host = 1 WHERE id = ?')->execute([$newHost['id']]);
+            $newHostName = $newHost['name'];
+        }
+    }
+
+    // A single combined event so a quick host-reassignment can't get silently
+    // overwritten by the leave/kick event before any client polls in between.
+    push_event($pdo, $gameId, [
+        'type' => $reason === 'kicked' ? 'player_kicked' : 'player_left',
+        'name' => $target['name'],
+        'by' => $byName,
+        'new_host' => $newHostName,
+    ]);
+
+    if (!in_array($game['status'], ['playing', 'tiebreak'], true) || $target['is_spectator']) {
+        return;
+    }
+
+    if ($game['status'] === 'tiebreak') {
+        $tiebreakIds = array_values(array_filter(j_decode($game['tiebreak_player_ids']), fn($id) => (int) $id !== $targetId));
+        if (count($tiebreakIds) <= 1) {
+            $winnerId = $tiebreakIds[0] ?? null;
+            $stmt = $pdo->prepare('UPDATE games SET status = ?, winner_player_id = ?, turn_deadline = NULL, updated_at = datetime("now") WHERE id = ?');
+            $stmt->execute(['finished', $winnerId, $gameId]);
+            if ($winnerId) {
+                push_event($pdo, $gameId, ['type' => 'game_finished', 'winner_id' => (int) $winnerId]);
+            }
+        } else {
+            $turnIdx = (int) $game['tiebreak_turn_index'] % count($tiebreakIds);
+            $stmt = $pdo->prepare('UPDATE games SET tiebreak_player_ids = ?, tiebreak_turn_index = ? WHERE id = ?');
+            $stmt->execute([j_encode($tiebreakIds), $turnIdx, $gameId]);
+        }
+        return;
+    }
+
+    // status === 'playing'
+    $remaining = playing_players($pdo, $gameId);
+    if (count($remaining) < 2) {
+        $winner = $remaining[0] ?? null;
+        $stmt = $pdo->prepare('UPDATE games SET status = ?, winner_player_id = ?, turn_deadline = NULL, updated_at = datetime("now") WHERE id = ?');
+        $stmt->execute(['finished', $winner ? $winner['id'] : null, $gameId]);
+        if ($winner) {
+            push_event($pdo, $gameId, ['type' => 'game_finished', 'winner_id' => (int) $winner['id']]);
+        }
+        return;
+    }
+
+    $wasTurnHolder = (int) $game['turn_player_id'] === $targetId;
+    $wasPending = (int) $game['pending_asker_id'] === $targetId || (int) $game['pending_target_id'] === $targetId;
+
+    if ($wasTurnHolder || $wasPending) {
+        // Whoever held the turn (directly or via a voided ask) — advance from their old seat.
+        $refSeat = (int) $target['seat_order'];
+        $next = $remaining[0];
+        foreach ($remaining as $p) {
+            if ((int) $p['seat_order'] > $refSeat) {
+                $next = $p;
+                break;
+            }
+        }
+        $deck = j_decode(fetch_game($pdo, $gameId)['deck']);
+        start_next_turn($pdo, $gameId, (int) $next['id'], $deck);
+        $freshGame = fetch_game($pdo, $gameId);
+        check_game_end($pdo, $freshGame);
+    }
+}

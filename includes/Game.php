@@ -134,13 +134,8 @@ function check_game_end(PDO $pdo, array $game): void {
         push_event($pdo, (int) $game['id'], ['type' => 'game_finished', 'winner_id' => (int) $leaders[0]['id']]);
     } else {
         $leaderIds = array_map(fn($p) => (int) $p['id'], $leaders);
-        // One card is drawn at random and kept hidden; tied players take turns
-        // guessing it (see resolve_tiebreak_guess). tiebreak_deck stores that
-        // single hidden card as a 1-element array.
-        $activeKeys = active_fish_keys($setCount);
-        $hiddenCard = $activeKeys[array_rand($activeKeys)];
         $stmt = $pdo->prepare('UPDATE games SET status = ?, tiebreak_player_ids = ?, tiebreak_deck = ?, tiebreak_turn_index = 0, turn_deadline = ?, updated_at = datetime("now") WHERE id = ?');
-        $stmt->execute(['tiebreak', j_encode($leaderIds), j_encode([$hiddenCard]), new_turn_deadline(), $game['id']]);
+        $stmt->execute(['tiebreak', j_encode($leaderIds), j_encode(build_deck($setCount)), new_turn_deadline(), $game['id']]);
         push_event($pdo, (int) $game['id'], ['type' => 'tiebreak_start', 'player_ids' => $leaderIds]);
     }
 }
@@ -334,22 +329,16 @@ function resolve_go_fish(PDO $pdo, array $game, bool $timedOut = false): void {
 /**
  * Resolve a tiebreak guess (shared by the tiebreak_guess.php endpoint and
  * the 60-second timeout auto-resolver, which supplies a random guess).
- *
- * A single card is drawn at random and kept hidden for the whole room; tied
- * players take turns guessing it. It stays the same card, round after round,
- * until someone guesses it correctly -- it is never redrawn along the way.
- * A wrong guess never reveals the hidden card's actual identity -- only a
- * correct guess does, via the 'drawn' field.
  */
 function resolve_tiebreak_guess(PDO $pdo, array $game, int $playerId, string $guess, bool $timedOut = false): void {
     $tiebreakIds = j_decode($game['tiebreak_player_ids']);
     $deck = j_decode($game['tiebreak_deck']);
-    $hiddenCard = $deck[0] ?? null;
-    if ($hiddenCard === null) {
-        $activeKeys = active_fish_keys((int) $game['fish_set_count']);
-        $hiddenCard = $activeKeys[array_rand($activeKeys)];
+
+    if (count($deck) === 0) {
+        $deck = build_deck((int) $game['fish_set_count']);
     }
-    $matched = ($hiddenCard === $guess);
+    $drawn = array_pop($deck);
+    $matched = ($drawn === $guess);
 
     // Folded into one event (rather than a separate game_finished push) so the
     // winning guess can't get silently overwritten before a client polls it.
@@ -357,24 +346,22 @@ function resolve_tiebreak_guess(PDO $pdo, array $game, int $playerId, string $gu
         'type' => 'tiebreak_guess',
         'player_id' => $playerId,
         'guess' => $guess,
-        'drawn' => $matched ? $hiddenCard : null, // never leak the hidden card on a miss
+        'drawn' => $drawn,
         'matched' => $matched,
         'timed_out' => $timedOut,
         'winner_id' => $matched ? $playerId : null,
     ]);
 
     if ($matched) {
-        $stmt = $pdo->prepare('UPDATE games SET status = ?, winner_player_id = ?, turn_deadline = NULL, updated_at = datetime("now") WHERE id = ?');
-        $stmt->execute(['finished', $playerId, $game['id']]);
+        $stmt = $pdo->prepare('UPDATE games SET status = ?, winner_player_id = ?, tiebreak_deck = ?, turn_deadline = NULL, updated_at = datetime("now") WHERE id = ?');
+        $stmt->execute(['finished', $playerId, j_encode($deck), $game['id']]);
         return;
     }
 
     $turnIdx = (int) $game['tiebreak_turn_index'];
     $nextIdx = count($tiebreakIds) > 0 ? ($turnIdx + 1) % count($tiebreakIds) : 0;
-
-    // The hidden card is unchanged -- just advance the turn and keep going.
     $stmt = $pdo->prepare('UPDATE games SET tiebreak_deck = ?, tiebreak_turn_index = ?, turn_deadline = ?, updated_at = datetime("now") WHERE id = ?');
-    $stmt->execute([j_encode([$hiddenCard]), $nextIdx, new_turn_deadline(), $game['id']]);
+    $stmt->execute([j_encode($deck), $nextIdx, new_turn_deadline(), $game['id']]);
 }
 
 /**
